@@ -226,7 +226,7 @@ export default function LandingPage() {
             zIndex: 0
           }}
         >
-          <source src="/hero-video.mp4" type="video/mp4" />
+          <source src="hero-video.mp4" type="video/mp4" />
         </video>
         
         {/* Fallback Animated Floating Green Orbs */}
