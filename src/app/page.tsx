@@ -106,7 +106,7 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-[#4ADE80] transition-colors duration-200">How it Works</a>
             <a href="#pricing" className="hover:text-[#4ADE80] transition-colors duration-200">Pricing</a>
             <a href="#faqs" className="hover:text-[#4ADE80] transition-colors duration-200">FAQs</a>
-            <a href="/login" className="hover:text-[#4ADE80] transition-colors duration-200 mr-2">Login</a>
+            <Link href="/login" className="hover:text-[#4ADE80] transition-colors duration-200 mr-2">Login</Link>
             <Link 
               href="/register" 
               className="bg-[#16A34A] text-white px-5 py-2.5 rounded-full font-bold text-[14px] shadow-lg shadow-[#16A34A]/25 hover:shadow-[#15803D]/30 hover:bg-[#15803D] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 min-h-0"
@@ -156,13 +156,13 @@ export default function LandingPage() {
             >
               FAQs
             </a>
-            <a 
+            <Link 
               href="/login" 
               onClick={() => setMenuOpen(false)}
               className="block font-bold text-white hover:text-[#4ADE80] py-2.5 border-b border-white/5 text-[15px] transition-colors"
             >
               Login
-            </a>
+            </Link>
             <Link 
               href="/register" 
               onClick={() => setMenuOpen(false)}
@@ -862,8 +862,8 @@ export default function LandingPage() {
               <p className="text-white text-xs font-black uppercase tracking-widest">Resources</p>
               <div className="flex flex-col gap-3 text-sm font-semibold">
                 <a href="#faqs" className="hover:text-white transition-colors duration-200">FAQ Documentation</a>
-                <a href="/login" className="hover:text-white transition-colors duration-200">Partner Login</a>
-                <a href="/register" className="hover:text-white transition-colors duration-200">Create Account</a>
+                <Link href="/login" className="hover:text-white transition-colors duration-200">Partner Login</Link>
+                <Link href="/register" className="hover:text-white transition-colors duration-200">Create Account</Link>
               </div>
             </div>
 
