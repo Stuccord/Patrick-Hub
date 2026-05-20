@@ -2,5 +2,5 @@
 2:I[90534,["/Patrick-Hub/_next/static/chunks/01xlw8hd842-c.js","/Patrick-Hub/_next/static/chunks/0d3shmwh5_nmn.js","/Patrick-Hub/_next/static/chunks/0_-9dyvttazgc.js"],"default"]
 3:I[97367,["/Patrick-Hub/_next/static/chunks/01xlw8hd842-c.js","/Patrick-Hub/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
 4:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"slug":"kofi-tech"}],[["$","script","script-0",{"src":"/Patrick-Hub/_next/static/chunks/0_-9dyvttazgc.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"V1wgKRq0TRGkiWWuO8Uic"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"slug":"kofi-tech"}],[["$","script","script-0",{"src":"/Patrick-Hub/_next/static/chunks/0_-9dyvttazgc.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"k_jzS19uP9Doy482SXuLH"}
 5:null
