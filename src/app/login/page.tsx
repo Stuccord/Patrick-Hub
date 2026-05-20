@@ -88,9 +88,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2 flex flex-col items-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-primary rounded-2xl text-white mb-2 shadow-xl shadow-brand-primary/20">
+          <Link href="/" className="inline-flex items-center justify-center w-16 h-16 bg-brand-primary rounded-2xl text-white mb-2 shadow-xl shadow-brand-primary/20 hover:scale-105 transition-transform duration-200">
             <Store className="h-8 w-8" />
-          </div>
+          </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Welcome Back</h1>
           <p className="text-sm text-slate-500">Sign in to your PatrickHub account</p>
         </div>
