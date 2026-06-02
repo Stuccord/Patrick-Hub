@@ -160,10 +160,6 @@ function LoginContent() {
                 Register as Agent
               </Link>
             </p>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-left">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center">Demo Admin Access</p>
-              <p className="text-xs text-slate-600 mt-1 font-semibold text-center">Email: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin@patricks-info-tech.com</span> | Pass: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin123</span></p>
-            </div>
           </div>
         </div>
       </div>
