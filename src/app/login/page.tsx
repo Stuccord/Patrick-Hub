@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { ArrowRight, Mail, Lock, Store, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
-export default function LoginPage() {
+function LoginContent() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -15,6 +15,16 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "pending_approval") {
+      setError("Your account is awaiting approval by an administrator.");
+    } else if (errorParam === "suspended") {
+      setError("Your account has been suspended.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,59 +32,43 @@ export default function LoginPage() {
     setError("");
 
     try {
-      let user = null;
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
 
-      try {
-        const supabase = createClient();
-        const { data: dbUser, error: dbError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', formData.email)
-          .single();
-
-        if (!dbError && dbUser) {
-          user = dbUser;
-        }
-      } catch (supabaseErr) {
-        console.warn("Supabase login skipped or failed, falling back to LocalStorage simulation.", supabaseErr);
+      if (authError) {
+        throw new Error(authError.message);
       }
 
-      if (formData.email === "admin@patrickhub.com" && formData.password === "admin123") {
-        user = {
-          role: "admin",
-          name: "Super Admin",
-          email: "admin@patrickhub.com",
-          status: "active"
-        };
+      const { data: dbUser, error: dbError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (dbError || !dbUser) {
+        throw new Error("User record not found in database.");
       }
 
-      if (!user) {
-        const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-        const foundLocal = localUsers.find((u: any) => u.email === formData.email && u.password_hash === formData.password);
-        if (foundLocal) {
-          user = foundLocal;
-        }
-      }
-
-      if (!user) {
-        throw new Error("Invalid login credentials");
-      }
-
-      if (user.role === 'admin') {
+      if (dbUser.role === 'admin') {
         router.push("/admin");
       } else {
-        if (user.status === 'pending') {
+        if (dbUser.status === 'pending') {
           setError("Your account is awaiting approval by an administrator.");
-        } else if (user.status === 'suspended') {
+          await supabase.auth.signOut();
+        } else if (dbUser.status === 'suspended') {
           setError("Your account has been suspended.");
+          await supabase.auth.signOut();
         } else {
-          localStorage.setItem("current_agent", JSON.stringify(user));
+          localStorage.setItem("current_agent", JSON.stringify(dbUser));
           router.push("/dashboard");
         }
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An error occurred during login");
+      setError(err.message || "Invalid login credentials");
     } finally {
       setLoading(false);
     }
@@ -84,6 +78,7 @@ export default function LoginPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -92,7 +87,7 @@ export default function LoginPage() {
             <Store className="h-8 w-8" />
           </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Welcome Back</h1>
-          <p className="text-sm text-slate-500">Sign in to your PatrickHub account</p>
+          <p className="text-sm text-slate-500">Sign in to your Patrick's Info Tech account</p>
         </div>
 
         <div className="bg-white p-5 sm:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 space-y-6">
@@ -114,7 +109,7 @@ export default function LoginPage() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  placeholder="kofi@patrickhub.com"
+                  placeholder="kofi@patricks-info-tech.com"
                   className="w-full pl-10 pr-4 h-12 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none transition-all text-base text-slate-900"
                 />
               </div>
@@ -167,11 +162,23 @@ export default function LoginPage() {
             </p>
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-left">
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center">Demo Admin Access</p>
-              <p className="text-xs text-slate-600 mt-1 font-semibold text-center">Email: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin@patrickhub.com</span> | Pass: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin123</span></p>
+              <p className="text-xs text-slate-600 mt-1 font-semibold text-center">Email: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin@patricks-info-tech.com</span> | Pass: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">admin123</span></p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-slate-500 font-bold">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

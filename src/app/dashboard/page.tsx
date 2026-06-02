@@ -12,35 +12,100 @@ import {
   ExternalLink
 } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase";
 
 export default function AgentDashboard() {
   const [agent, setAgent] = useState<any>({
-    name: "Kofi Tech Solutions",
-    username: "kofi-tech",
-    wallet: 1450.80,
-    store_url: "localhost:3000/store/kofi-tech"
+    name: "Reseller",
+    username: "",
+    wallet: 0.00,
+    status: "pending",
+    store_url: ""
   });
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    monthlyProfit: 0.00
+  });
+  const [host, setHost] = useState("");
 
   useEffect(() => {
-    const current = localStorage.getItem("current_agent");
-    if (current) {
-      const parsed = JSON.parse(current);
-      const dbUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-      const freshAgent = dbUsers.find((u: any) => u.id === parsed.id) || parsed;
-      
-      setAgent({
-        ...freshAgent,
-        store_url: `localhost:3000/store/${freshAgent.username}`
-      });
+    if (typeof window !== 'undefined') {
+      setHost(window.location.host);
     }
   }, []);
 
+  const fetchData = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Fetch user profile
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (profileError) throw profileError;
+
+      // 2. Fetch wallet
+      const { data: wallet, error: walletError } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('agent_id', user.id)
+        .single();
+
+      // 3. Fetch total completed orders count
+      const { count: totalOrders } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .eq('status', 'completed');
+
+      // 4. Fetch monthly profit
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const { data: monthlyOrders } = await supabase
+        .from('orders')
+        .select('agent_credited')
+        .eq('agent_id', user.id)
+        .eq('status', 'completed')
+        .gte('created_at', startOfMonth);
+
+      const monthlyProfit = (monthlyOrders || []).reduce((acc, o) => acc + Number(o.agent_credited), 0);
+
+      const username = profile?.username || "";
+      setAgent({
+        name: profile?.name || "Reseller",
+        username: username,
+        wallet: Number(wallet?.balance || 0),
+        status: profile?.status || "pending",
+        store_url: username ? `${host || 'localhost:3000'}/store/${username}` : ""
+      });
+
+      setStats({
+        totalOrders: totalOrders || 0,
+        monthlyProfit
+      });
+    } catch (err) {
+      console.error("Error loading agent dashboard stats:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (host) {
+      fetchData();
+    }
+  }, [host]);
+
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(agent.store_url);
+    if (!agent.store_url) return;
+    navigator.clipboard.writeText(`http://${agent.store_url}`);
     alert("Store link copied to clipboard!");
   };
 
   const handleWhatsAppShare = () => {
+    if (!agent.store_url) return;
     const message = encodeURIComponent(`Buy affordable data from my store: http://${agent.store_url}`);
     window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank');
   };
@@ -54,7 +119,7 @@ export default function AgentDashboard() {
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Here is a quick overview of your reseller business performance.</p>
         </div>
         <div className="bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 font-bold text-xs text-slate-300">
-          Agent Status: <span className="text-green-500 font-extrabold capitalize">{agent.status || 'Active'}</span>
+          Agent Status: <span className={`font-extrabold capitalize ${agent.status === 'active' ? 'text-green-500' : 'text-amber-500'}`}>{agent.status || 'Pending'}</span>
         </div>
       </div>
 
@@ -76,7 +141,7 @@ export default function AgentDashboard() {
             <TrendingUp className="h-12 w-12" />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1">Total Orders</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">84</h3>
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalOrders}</h3>
           <Link href="/dashboard/orders" className="mt-4 text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline w-fit min-h-[36px]">
             View All Orders <ArrowDownToLine className="h-3 w-3 -rotate-90" />
           </Link>
@@ -87,8 +152,8 @@ export default function AgentDashboard() {
             <Users className="h-12 w-12" />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1">Profit This Month</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-brand-primary">{formatCurrency(124.50)}</h3>
-          <p className="mt-4 text-[10px] sm:text-xs text-slate-400 font-bold leading-none">+12% from last month</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-brand-primary">{formatCurrency(stats.monthlyProfit)}</h3>
+          <p className="mt-4 text-[10px] sm:text-xs text-slate-400 font-bold leading-none">Net reseller earnings</p>
         </div>
       </div>
 
@@ -100,32 +165,36 @@ export default function AgentDashboard() {
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <div className="bg-white px-4 py-3 rounded-xl border border-brand-primary/25 text-xs sm:text-sm font-mono text-slate-600 flex-1 truncate select-all min-h-[48px] flex items-center">
-            {agent.store_url}
+            {agent.store_url || "Generating store link..."}
           </div>
           
           <div className="flex items-center gap-2">
             <button 
               onClick={handleCopyLink}
-              className="flex-1 sm:flex-none p-3.5 bg-white text-brand-primary rounded-xl border border-brand-primary/20 hover:bg-brand-primary hover:text-white transition-all min-h-[48px] flex items-center justify-center gap-2 font-bold text-xs" 
+              disabled={!agent.store_url}
+              className="flex-1 sm:flex-none p-3.5 bg-white text-brand-primary rounded-xl border border-brand-primary/20 hover:bg-brand-primary hover:text-white transition-all min-h-[48px] flex items-center justify-center gap-2 font-bold text-xs disabled:opacity-50 cursor-pointer" 
               title="Copy Link"
             >
               <Copy className="h-4.5 w-4.5" /> Copy Link
             </button>
             <button 
               onClick={handleWhatsAppShare}
-              className="flex-1 sm:flex-none p-3.5 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all min-h-[48px] flex items-center justify-center gap-1.5 font-bold text-xs px-4" 
+              disabled={!agent.store_url}
+              className="flex-1 sm:flex-none p-3.5 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all min-h-[48px] flex items-center justify-center gap-1.5 font-bold text-xs px-4 disabled:opacity-50 cursor-pointer" 
               title="Share via WhatsApp"
             >
               <Share2 className="h-4.5 w-4.5" /> WhatsApp
             </button>
-            <Link 
-              href={`/store/${agent.username}`} 
-              target="_blank" 
-              className="p-3.5 bg-white text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all min-h-[48px] flex items-center justify-center" 
-              title="Visit Store"
-            >
-              <ExternalLink className="h-4.5 w-4.5" />
-            </Link>
+            {agent.username && (
+              <Link 
+                href={`/store/${agent.username}`} 
+                target="_blank" 
+                className="p-3.5 bg-white text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all min-h-[48px] flex items-center justify-center" 
+                title="Visit Store"
+              >
+                <ExternalLink className="h-4.5 w-4.5" />
+              </Link>
+            )}
           </div>
         </div>
       </div>

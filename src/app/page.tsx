@@ -28,10 +28,30 @@ export default function LandingPage() {
   const [salesCount, setSalesCount] = useState(248);
   const [earnedToday, setEarnedToday] = useState(475);
   const [recentSale, setRecentSale] = useState<{name: string, plan: string, profit: string} | null>(null);
+  
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // old Pexels video states and hooks removed to resolve CORS issues
 
   useEffect(() => {
+    // Check if user is logged in
+    const checkUser = async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase");
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const agentData = localStorage.getItem("current_agent");
+          if (agentData) {
+            setUserRole("agent");
+          } else {
+            setUserRole("admin");
+          }
+        }
+      } catch (e) {}
+    };
+    checkUser();
+
     const salesList = [
       { name: "Ama K.", plan: "MTN 1GB", profit: "GHS 1.50" },
       { name: "Kweku A.", plan: "Telecel 2GB", profit: "GHS 2.80" },
@@ -96,7 +116,7 @@ export default function LandingPage() {
               P
             </div>
             <span className="text-xl font-extrabold text-white tracking-tight flex items-center">
-              PatrickHub<span className="text-[#16A34A] text-2xl leading-none">.</span>
+              Patrick's Info Tech<span className="text-[#16A34A] text-2xl leading-none">.</span>
             </span>
           </div>
 
@@ -106,13 +126,24 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-[#4ADE80] transition-colors duration-200">How it Works</a>
             <a href="#pricing" className="hover:text-[#4ADE80] transition-colors duration-200">Pricing</a>
             <a href="#faqs" className="hover:text-[#4ADE80] transition-colors duration-200">FAQs</a>
-            <Link href="/login" className="hover:text-[#4ADE80] transition-colors duration-200 mr-2">Login</Link>
-            <Link 
-              href="/register" 
-              className="bg-[#16A34A] text-white px-5 py-2.5 rounded-full font-bold text-[14px] shadow-lg shadow-[#16A34A]/25 hover:shadow-[#15803D]/30 hover:bg-[#15803D] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 min-h-0"
-            >
-              Get Started
-            </Link>
+            {userRole ? (
+              <Link 
+                href={userRole === 'admin' ? '/admin' : '/dashboard'} 
+                className="bg-[#16A34A] text-white px-5 py-2.5 rounded-full font-bold text-[14px] shadow-lg shadow-[#16A34A]/25 hover:shadow-[#15803D]/30 hover:bg-[#15803D] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 min-h-0"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="hover:text-[#4ADE80] transition-colors duration-200 mr-2">Login</Link>
+                <Link 
+                  href="/register" 
+                  className="bg-[#16A34A] text-white px-5 py-2.5 rounded-full font-bold text-[14px] shadow-lg shadow-[#16A34A]/25 hover:shadow-[#15803D]/30 hover:bg-[#15803D] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 min-h-0"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Hamburger Button */}
@@ -156,20 +187,32 @@ export default function LandingPage() {
             >
               FAQs
             </a>
-            <Link 
-              href="/login" 
-              onClick={() => setMenuOpen(false)}
-              className="block font-bold text-white hover:text-[#4ADE80] py-2.5 border-b border-white/5 text-[15px] transition-colors"
-            >
-              Login
-            </Link>
-            <Link 
-              href="/register" 
-              onClick={() => setMenuOpen(false)}
-              className="block bg-[#16A34A] text-white text-center py-3.5 rounded-full font-bold text-[15px] shadow-lg shadow-[#16A34A]/25 min-h-0"
-            >
-              Get Started
-            </Link>
+            {userRole ? (
+              <Link 
+                href={userRole === 'admin' ? '/admin' : '/dashboard'} 
+                onClick={() => setMenuOpen(false)}
+                className="block bg-[#16A34A] text-white text-center py-3.5 rounded-full font-bold text-[15px] shadow-lg shadow-[#16A34A]/25 min-h-0"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link 
+                  href="/login" 
+                  onClick={() => setMenuOpen(false)}
+                  className="block font-bold text-white hover:text-[#4ADE80] py-2.5 border-b border-white/5 text-[15px] transition-colors"
+                >
+                  Login
+                </Link>
+                <Link 
+                  href="/register" 
+                  onClick={() => setMenuOpen(false)}
+                  className="block bg-[#16A34A] text-white text-center py-3.5 rounded-full font-bold text-[15px] shadow-lg shadow-[#16A34A]/25 min-h-0"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         )}
       </nav>
@@ -401,7 +444,7 @@ export default function LandingPage() {
                     <span className="w-3 h-3 rounded-full bg-red-400"></span>
                     <span className="w-3 h-3 rounded-full bg-amber-400"></span>
                     <span className="w-3 h-3 rounded-full bg-emerald-400"></span>
-                    <span className="text-[11px] text-slate-400 font-semibold ml-2 tracking-tight">mystore.patrickhub.com</span>
+                    <span className="text-[11px] text-slate-400 font-semibold ml-2 tracking-tight">mystore.patricks-info-tech.com</span>
                   </div>
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F0FDF4] text-[#16A34A] text-[10px] font-extrabold border border-[#DCFCE7]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-ping"></span>
@@ -463,9 +506,7 @@ export default function LandingPage() {
                         <p className="font-black text-[#16A34A] text-xs sm:text-[13px] leading-tight">GH₵ 5.50</p>
                         <p className="text-[9px] text-[#15803D] font-extrabold">Profit: +GH₵ 1.30</p>
                       </div>
-                      <span className="h-6 px-2 bg-[#16A34A] text-white rounded-md text-[9px] font-bold transition-colors min-h-0 flex items-center justify-center shadow-sm">
-                        View
-                      </span>
+                      <Link href="/checkout?bundle=1GB%20MTN%20Data&price=5.50" className="h-6 px-2 bg-[#16A34A] text-white rounded-md text-[9px] font-bold transition-colors min-h-0 flex items-center justify-center shadow-sm">Buy</Link>
                     </div>
                   </div>
 
@@ -511,7 +552,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center space-y-4 max-w-2xl mx-auto mb-16">
-            <span className="text-[#16A34A] text-[11px] font-black tracking-widest uppercase block">Why Choose PatrickHub?</span>
+            <span className="text-[#16A34A] text-[11px] font-black tracking-widest uppercase block">Why Choose Patrick's Info Tech?</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0F172A] tracking-tight">
               Everything you need to launch a profitable business
             </h2>
@@ -583,7 +624,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           
           <div className="text-center space-y-4 mb-10">
-            <h2 className="text-[28px] font-bold text-[#0F172A]">See How PatrickHub Works</h2>
+            <h2 className="text-[28px] font-bold text-[#0F172A]">See How Patrick's Info Tech Works</h2>
             <p className="text-[15px] text-[#64748B] max-w-xl mx-auto leading-relaxed">
               Watch how easy it is to set up your store and start earning in minutes.
             </p>
@@ -593,7 +634,7 @@ export default function LandingPage() {
           <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.15)] border-none mb-10 bg-black">
             <iframe 
               src="https://www.youtube.com/embed/EngW7tLk6R8" 
-              title="See How PatrickHub Works" 
+              title="See How Patrick's Info Tech Works" 
               className="absolute top-0 left-0 w-full h-full border-none rounded-2xl"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
               allowFullScreen
@@ -770,7 +811,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-sm text-[#F59E0B] mb-3">★★★★★</div>
                 <p className="text-[14px] text-[#475569] leading-relaxed italic font-medium">
-                  "PatrickHub changed my hustle completely. I now have 50+ regular customers buying data through my link every week."
+                  "Patrick's Info Tech changed my hustle completely. I now have 50+ regular customers buying data through my link every week."
                 </p>
               </div>
             </div>
@@ -791,7 +832,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-sm text-[#F59E0B] mb-3">★★★★★</div>
                 <p className="text-[14px] text-[#475569] leading-relaxed italic font-medium">
-                  "The withdrawal system is seamless. Money goes straight to my MoMo. I recommend PatrickHub to every data seller."
+                  "The withdrawal system is seamless. Money goes straight to my MoMo. I recommend Patrick's Info Tech to every data seller."
                 </p>
               </div>
             </div>
@@ -837,10 +878,10 @@ export default function LandingPage() {
             {/* Column 1: Brand Info */}
             <div className="md:col-span-5 space-y-5 text-center md:text-left">
               <div className="flex items-center justify-center md:justify-start gap-2">
-                <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-black text-base shadow-md shadow-[#16A34A]/10">
-                  P
+                <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-black text-xs shadow-md shadow-[#16A34A]/10">
+                  PI
                 </div>
-                <span className="text-lg font-extrabold text-white tracking-tight">PatrickHub.</span>
+                <span className="text-lg font-extrabold text-white tracking-tight">Patrick's Info Tech.</span>
               </div>
               <p className="text-[13.5px] leading-relaxed max-w-sm text-slate-400 font-medium">
                 Ghana's ultimate data reselling software platform. We enable micro-entrepreneurs and agencies to instantly build branded stores, sell major network bundles, and grow their businesses automatically.
@@ -882,7 +923,7 @@ export default function LandingPage() {
           {/* Bottom Divider & Copyright */}
           <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-              © 2025 PatrickHub. All rights reserved.
+              © 2025 Patrick's Info Tech. All rights reserved.
             </p>
             <p className="text-xs text-slate-600 font-medium">
               Made with 💚 for Ghanaian Entrepreneurs

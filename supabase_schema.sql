@@ -1,8 +1,8 @@
--- PatrickHub Supabase Schema
+-- Patrick's Info Tech Supabase Schema
 
 -- Users Table
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY, -- Maps to Supabase auth.users.id
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT NOT NULL,
@@ -10,6 +10,9 @@ CREATE TABLE users (
   role TEXT NOT NULL CHECK (role IN ('admin', 'agent')),
   status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'suspended')) DEFAULT 'pending',
   password_hash TEXT, -- Storing encrypted password (or use Supabase Auth)
+  store_name TEXT,
+  store_description TEXT,
+  logo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

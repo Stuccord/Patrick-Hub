@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PatrickHub | Ghana's #1 Reseller Platform",
+  title: "Patrick's Info Tech | Ghana's #1 Reseller Platform",
   description: "Empower your business with Ghana's ultimate data reselling software. Instantly deploy your own branded web store, sell high-demand data bundles, and enjoy direct automatic payouts.",
 };
 

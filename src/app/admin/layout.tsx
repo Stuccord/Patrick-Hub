@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   BarChart3, 
   Users, 
@@ -17,11 +17,48 @@ import {
   Globe
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [adminName, setAdminName] = useState("Admin Central");
+  const [adminInitials, setAdminInitials] = useState("AC");
+
+  useEffect(() => {
+    const fetchAdmin = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile?.name) {
+            setAdminName(profile.name);
+            const parts = profile.name.trim().split(/\s+/);
+            const initials = parts.map((p: string) => p.charAt(0)).join("").substring(0, 2).toUpperCase();
+            setAdminInitials(initials || "A");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading admin profile:", err);
+      }
+    };
+    fetchAdmin();
+  }, []);
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   const isActive = (path: string) => {
     if (path === "/admin") return pathname === "/admin";
@@ -37,10 +74,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden lg:flex w-[220px] bg-white border-r border-[#E5E7EB] flex-col fixed left-0 top-0 bottom-0 z-30 h-screen">
         {/* Logo Area - Height: 56px, border-bottom */}
         <div className="h-14 px-5 border-b border-[#E5E7EB] flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm">
-            P
+          <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm">
+            PI
           </div>
-          <span className="text-base font-semibold text-[#111827] tracking-tight">PatrickHub</span>
+          <span className="text-base font-semibold text-[#111827] tracking-tight">Patrick's Info Tech</span>
         </div>
 
         {/* Navigation - Font: 14px, color #6B7280 (inactive), padding: 10px 16px, border-radius: 8px */}
@@ -142,10 +179,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-3 w-full max-w-[500px]">
             {/* Logo visible only on mobile/tablet */}
             <div className="flex lg:hidden items-center gap-2 shrink-0">
-              <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm">
-                P
+              <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                PI
               </div>
-              <span className="text-base font-semibold text-[#111827] tracking-tight mr-2">PatrickHub</span>
+              <span className="text-base font-semibold text-[#111827] tracking-tight mr-2">Patrick's Info Tech</span>
             </div>
 
             {/* Search Bar - max-width 400px, height 36px, border-radius 8px */}
@@ -172,14 +209,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Profile/Avatar Block */}
             <div className="flex items-center gap-2.5">
               <div className="hidden md:flex flex-col text-right">
-                <span className="text-[14px] font-medium text-[#111827] leading-none">Admin Central</span>
+                <span className="text-[14px] font-medium text-[#111827] leading-none">{adminName}</span>
                 <span className="text-[10px] px-1.5 py-0.5 bg-[#F0FDF4] text-[#15803D] font-semibold rounded-full inline-block self-end mt-1">
                   Super Admin
                 </span>
               </div>
               {/* Avatar circle with initials (32px, dark background) */}
               <div className="w-8 h-8 rounded-full bg-[#111827] flex items-center justify-center text-white font-semibold text-xs tracking-wider">
-                AC
+                {adminInitials}
               </div>
             </div>
           </div>
@@ -299,14 +336,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 System Audit Logs
               </Link>
               <hr className="border-[#E5E7EB] my-1" />
-              <Link 
-                href="/login" 
-                onClick={() => setShowMoreMenu(false)}
-                className="flex items-center gap-3.5 p-3 hover:bg-red-50 text-[#EF4444] rounded-xl transition-all font-medium text-[14px]"
+              <button 
+                onClick={(e) => {
+                  setShowMoreMenu(false);
+                  handleLogout(e);
+                }}
+                className="flex items-center gap-3.5 p-3 hover:bg-red-50 text-[#EF4444] rounded-xl transition-all font-medium text-[14px] w-full text-left cursor-pointer"
               >
                 <LogOut className="h-5 w-5 shrink-0" />
                 Log Out
-              </Link>
+              </button>
             </div>
           </div>
         </div>

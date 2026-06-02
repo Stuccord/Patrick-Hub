@@ -1,5 +1,5 @@
 {
-  "name": "patrickhub",
+  "name": "patricks-info-tech",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,14 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@paystack/inline-js": "^2.22.9",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
     "clsx": "^2.1.1",
+    "date-fns": "^4.3.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "tailwind-merge": "^3.6.0"
+    "resend": "^6.12.3",
+    "tailwind-merge": "^3.6.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

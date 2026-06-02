@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, User, Mail, Store, ShieldCheck, Phone, Lock, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
+import { sendAgentSignupNotification } from "@/lib/emails";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -33,30 +34,60 @@ export default function RegisterPage() {
     }
 
     try {
-      try {
-        const supabase = createClient();
-        const { error: dbError } = await supabase.from('users').insert([{
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          username: formData.username,
-          role: 'agent',
-          status: 'pending',
-          password_hash: formData.password 
-        }]);
+      const supabase = createClient();
+      
+      // 1. Sign up user via Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+            phone: formData.phone,
+            username: formData.username,
+            role: 'agent'
+          }
+        }
+      });
 
-        if (dbError) throw dbError;
-      } catch (supabaseErr) {
-        console.warn("Supabase insert skipped or failed, falling back to LocalStorage simulation.", supabaseErr);
+      if (authError) {
+        throw authError;
       }
 
-      const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-      if (localUsers.find((u: any) => u.email === formData.email || u.username === formData.username)) {
-        throw new Error("User with this email or username already exists");
+      if (!authData.user) {
+        throw new Error("Registration failed to create user credentials.");
       }
 
+      // 2. Insert record into public.users table
+      const { error: dbError } = await supabase.from('users').insert([{
+        id: authData.user.id,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        username: formData.username,
+        role: 'agent',
+        status: 'pending',
+        password_hash: formData.password 
+      }]);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // 3. Initialize wallet in wallets table
+      const { error: walletError } = await supabase.from('wallets').insert([{
+        agent_id: authData.user.id,
+        balance: 0.00
+      }]);
+
+      if (walletError) {
+        throw walletError;
+      }
+
+      // Sync with LocalStorage simulation if other local pages need it
+      const localUsers = JSON.parse(localStorage.getItem("patricks-info-tech_users") || "[]");
       const newUser = {
-        id: "usr_" + Math.random().toString(36).substr(2, 9),
+        id: authData.user.id,
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
@@ -66,9 +97,11 @@ export default function RegisterPage() {
         password_hash: formData.password,
         wallet: 0
       };
-      
       localUsers.push(newUser);
-      localStorage.setItem("patrickhub_users", JSON.stringify(localUsers));
+      localStorage.setItem("patricks-info-tech_users", JSON.stringify(localUsers));
+
+      // Send signup notification
+      await sendAgentSignupNotification(formData.name, formData.email);
 
       setSuccess(true);
     } catch (err: any) {
@@ -147,7 +180,7 @@ export default function RegisterPage() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  placeholder="kofi@patrickhub.com"
+                  placeholder="kofi@patricks-info-tech.com"
                   className="w-full pl-10 pr-4 h-12 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none transition-all text-base text-slate-900"
                 />
               </div>

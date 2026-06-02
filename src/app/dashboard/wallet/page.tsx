@@ -3,68 +3,133 @@
 import { formatCurrency } from "@/lib/pricing";
 import { Wallet, ArrowDownRight, ArrowUpRight, ArrowRight, ShieldAlert } from "lucide-react";
 import { useState, useEffect } from "react";
-
-const COMMISSION_RATE = 5;
-
-const TXN_HISTORY = [
-  { id: "1", type: "credit", amount: 0.80, desc: "Profit from Order DH-847291", date: "Today, 14:32" },
-  { id: "2", type: "credit", amount: 1.50, desc: "Profit from Order DH-392810", date: "Today, 10:15" },
-  { id: "3", type: "debit", amount: 500.00, desc: "Withdrawal to 024***4567", date: "Yesterday, 11:00" },
-  { id: "4", type: "credit", amount: 3.50, desc: "Profit from Order DH-102938", date: "Yesterday, 18:45" },
-];
+import { createClient } from "@/lib/supabase";
+import { format } from "date-fns";
 
 export default function AgentWallet() {
-  const [walletBalance, setWalletBalance] = useState(1450.80);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [commissionRate, setCommissionRate] = useState(5);
+  const [txnHistory, setTxnHistory] = useState<any[]>([]);
   const [amount, setAmount] = useState("");
   const [network, setNetwork] = useState("MTN");
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWalletData = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch config
+      const { data: configData } = await supabase
+        .from('platform_config')
+        .select('value')
+        .eq('key', 'withdrawal_commission')
+        .single();
+      
+      if (configData) {
+        setCommissionRate(Number(configData.value) || 5);
+      }
+
+      // Fetch wallet balance
+      const { data: walletData } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('agent_id', user.id)
+        .single();
+        
+      if (walletData) {
+        setWalletBalance(Number(walletData.balance));
+      }
+
+      // Fetch transaction history
+      const { data: txns } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('agent_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (txns) {
+        setTxnHistory(txns);
+      }
+    } catch (err) {
+      console.error("Error fetching wallet data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Read live balance from localStorage current_agent if exists
-    const current = localStorage.getItem("current_agent");
-    if (current) {
-      const parsed = JSON.parse(current);
-      const dbUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-      const freshAgent = dbUsers.find((u: any) => u.id === parsed.id) || parsed;
-      setWalletBalance(freshAgent.wallet || 0);
-    }
+    fetchWalletData();
   }, []);
 
   const reqAmount = parseFloat(amount) || 0;
-  const commission = reqAmount * (COMMISSION_RATE / 100);
+  const commission = reqAmount * (commissionRate / 100);
   const payout = reqAmount - commission;
 
-  const handleWithdraw = (e: React.FormEvent) => {
+  const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (reqAmount > walletBalance || reqAmount <= 0) return;
     
     setIsSubmitting(true);
-    setTimeout(() => {
-      // Deduct balance locally
-      const current = localStorage.getItem("current_agent");
-      if (current) {
-        const parsed = JSON.parse(current);
-        const dbUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-        const updatedUsers = dbUsers.map((u: any) => {
-          if (u.id === parsed.id) {
-            return { ...u, wallet: u.wallet - reqAmount };
-          }
-          return u;
-        });
-        localStorage.setItem("patrickhub_users", JSON.stringify(updatedUsers));
-        const freshAgent = updatedUsers.find((u: any) => u.id === parsed.id);
-        localStorage.setItem("current_agent", JSON.stringify(freshAgent));
-        setWalletBalance(freshAgent.wallet || 0);
-      }
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      setIsSubmitting(false);
+      // Note: Ideally, we would use an RPC for a transactional guarantee.
+      // 1. Insert pending withdrawal
+      const { error: withdrawalError } = await supabase
+        .from('withdrawals')
+        .insert({
+          agent_id: user.id,
+          amount_requested: reqAmount,
+          commission_pct: commissionRate,
+          payout_amount: payout,
+          momo_number: phone,
+          network: network,
+          status: 'pending'
+        });
+      
+      if (withdrawalError) throw withdrawalError;
+
+      // 2. Insert wallet transaction (debit)
+      const { error: txnError } = await supabase
+        .from('wallet_transactions')
+        .insert({
+          agent_id: user.id,
+          type: 'debit',
+          amount: reqAmount,
+          description: `Withdrawal request to ${phone}`
+        });
+
+      if (txnError) throw txnError;
+
+      // 3. Update wallet balance
+      const newBalance = walletBalance - reqAmount;
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: newBalance })
+        .eq('agent_id', user.id);
+        
+      if (walletError) throw walletError;
+
+      setWalletBalance(newBalance);
       setSuccess(true);
       setAmount("");
       setPhone("");
+      fetchWalletData(); // Refresh history
+      
       setTimeout(() => setSuccess(false), 5000);
-    }, 1500);
+    } catch (err) {
+      console.error("Error requesting withdrawal:", err);
+      alert("Failed to request withdrawal.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -83,7 +148,7 @@ export default function AgentWallet() {
               <Wallet className="w-5 h-5" />
               <span className="font-bold text-sm">Available Balance</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-black">{formatCurrency(walletBalance)}</h2>
+            <h2 className="text-3xl sm:text-4xl font-black">{loading ? "..." : formatCurrency(walletBalance)}</h2>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
@@ -144,7 +209,7 @@ export default function AgentWallet() {
                     <span className="font-bold text-slate-900">{formatCurrency(reqAmount)}</span>
                   </div>
                   <div className="flex justify-between text-red-500">
-                    <span>Commission ({COMMISSION_RATE}%):</span>
+                    <span>Commission ({commissionRate}%):</span>
                     <span className="font-bold">-{formatCurrency(commission)}</span>
                   </div>
                   <div className="border-t border-slate-200 pt-2 flex justify-between font-bold">
@@ -179,24 +244,30 @@ export default function AgentWallet() {
               <h3 className="font-bold text-slate-900 text-base sm:text-lg">Wallet History</h3>
             </div>
             <div className="divide-y divide-slate-100 flex-1">
-              {TXN_HISTORY.map((txn) => (
-                <div key={txn.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                      txn.type === 'credit' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
-                      {txn.type === 'credit' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+              {loading ? (
+                <div className="p-6 text-center text-slate-400 font-medium">Loading history...</div>
+              ) : txnHistory.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 font-medium">No transactions yet.</div>
+              ) : (
+                txnHistory.map((txn) => (
+                  <div key={txn.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                        txn.type === 'credit' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {txn.type === 'credit' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 text-xs sm:text-sm leading-tight">{txn.description}</p>
+                        <p className="text-[10px] text-slate-500 mt-1">{format(new Date(txn.created_at), "MMM d, yyyy HH:mm")}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm leading-tight">{txn.desc}</p>
-                      <p className="text-[10px] text-slate-500 mt-1">{txn.date}</p>
+                    <div className={`font-black text-xs sm:text-sm shrink-0 ${txn.type === 'credit' ? 'text-green-600' : 'text-slate-900'}`}>
+                      {txn.type === 'credit' ? '+' : '-'}{formatCurrency(Number(txn.amount))}
                     </div>
                   </div>
-                  <div className={`font-black text-xs sm:text-sm shrink-0 ${txn.type === 'credit' ? 'text-green-600' : 'text-slate-900'}`}>
-                    {txn.type === 'credit' ? '+' : '-'}{formatCurrency(txn.amount)}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

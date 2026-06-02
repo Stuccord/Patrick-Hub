@@ -1,46 +1,109 @@
 "use client";
 
 import { Save, Upload, Store } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase";
 
 export default function StoreSettings() {
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    storeName: "Kofi Tech Solutions",
-    tagline: "Your reliable source for affordable data.",
-    slug: "kofi-tech"
+    storeName: "",
+    tagline: "",
+    slug: "",
+    logoUrl: ""
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const current = localStorage.getItem("current_agent");
-    if (current) {
-      const parsed = JSON.parse(current);
-      setFormData({
-        storeName: parsed.name || "My Data Store",
-        tagline: parsed.tagline || "Your reliable source for affordable data.",
-        slug: parsed.username || "mystore"
-      });
-    }
+    const fetchProfile = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setUserId(user.id);
+
+        const { data, error } = await supabase
+          .from('users')
+          .select('store_name, store_description, username, logo_url')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setFormData({
+            storeName: data.store_name || "",
+            tagline: data.store_description || "",
+            slug: data.username || "",
+            logoUrl: data.logo_url || ""
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching store settings:", err);
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    fetchProfile();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    try {
+      const supabase = createClient();
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${userId}-${Math.random()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('logos')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, logoUrl: publicUrlData.publicUrl }));
+    } catch (err) {
+      console.error("Error uploading logo:", err);
+      alert("Failed to upload logo. Ensure the 'logos' bucket exists and is public.");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) return;
     setLoading(true);
     
-    // Save updated name and tagline
-    const current = localStorage.getItem("current_agent");
-    if (current) {
-      const parsed = JSON.parse(current);
-      const updatedAgent = { ...parsed, name: formData.storeName, tagline: formData.tagline };
-      localStorage.setItem("current_agent", JSON.stringify(updatedAgent));
-      
-      const dbUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-      const updatedUsers = dbUsers.map((u: any) => u.id === parsed.id ? { ...u, name: formData.storeName } : u);
-      localStorage.setItem("patrickhub_users", JSON.stringify(updatedUsers));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('users')
+        .update({
+          store_name: formData.storeName,
+          store_description: formData.tagline,
+          logo_url: formData.logoUrl
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      alert("Store settings saved successfully!");
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      alert("Failed to save settings.");
+    } finally {
+      setLoading(false);
     }
-    
-    setTimeout(() => setLoading(false), 800);
   };
+
+  if (fetching) {
+    return <div className="p-8 text-center text-slate-500">Loading settings...</div>;
+  }
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-6 pb-24 lg:pb-8">
@@ -53,13 +116,29 @@ export default function StoreSettings() {
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="w-28 h-28 bg-slate-100 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 shrink-0 relative overflow-hidden group">
-              <Store className="w-6 h-6 mb-1" />
-              <span className="text-[10px] font-bold">Upload Logo</span>
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+            <div 
+              className="w-28 h-28 bg-slate-100 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 shrink-0 relative overflow-hidden group cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {formData.logoUrl ? (
+                <img src={formData.logoUrl} alt="Store Logo" className="w-full h-full object-cover" />
+              ) : (
+                <>
+                  <Store className="w-6 h-6 mb-1" />
+                  <span className="text-[10px] font-bold">Upload Logo</span>
+                </>
+              )}
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Upload className="w-5 h-5 text-white" />
               </div>
             </div>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleLogoUpload}
+            />
 
             <div className="flex-1 space-y-4 w-full">
               <div className="space-y-2">

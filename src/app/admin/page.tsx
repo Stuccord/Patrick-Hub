@@ -13,52 +13,152 @@ import {
   Clock,
   UserX
 } from "lucide-react";
+import { createClient } from "@/lib/supabase";
+import { sendAgentApprovalNotification, sendWithdrawalProcessedNotification } from "@/lib/emails";
 
 export default function AdminDashboard() {
-  const [agents, setAgents] = useState<any[]>([]);
+  const [pendingAgents, setPendingAgents] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [stats, setStats] = useState({
-    totalSales: 125400.00,
-    platformEarnings: 2450.20,
+    totalSales: 0.00,
+    platformEarnings: 0.00,
     activeAgentsCount: 0,
-    pendingWithdrawalsCount: 1,
+    pendingWithdrawalsCount: 0,
   });
 
-  useEffect(() => {
-    const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-    setAgents(localUsers);
+  const fetchData = async () => {
+    try {
+      const supabase = createClient();
 
-    const activeCount = localUsers.filter((u: any) => u.status === 'active').length;
-    setStats(prev => ({
-      ...prev,
-      activeAgentsCount: activeCount
-    }));
+      // 1. Fetch completed orders stats
+      const { data: completedOrders } = await supabase
+        .from('orders')
+        .select('customer_paid, platform_fee')
+        .eq('status', 'completed');
+
+      const totalSales = completedOrders?.reduce((acc, o) => acc + Number(o.customer_paid), 0) || 0;
+      const orderFees = completedOrders?.reduce((acc, o) => acc + Number(o.platform_fee), 0) || 0;
+
+      // 2. Fetch approved withdrawals for commission stats
+      const { data: approvedWithdrawals } = await supabase
+        .from('withdrawals')
+        .select('amount_requested, payout_amount')
+        .eq('status', 'approved');
+
+      const withdrawalCommissions = approvedWithdrawals?.reduce((acc, w) => {
+        return acc + (Number(w.amount_requested) - Number(w.payout_amount));
+      }, 0) || 0;
+
+      const platformEarnings = orderFees + withdrawalCommissions;
+
+      // 3. Fetch count of active agents
+      const { count: activeAgentsCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'agent')
+        .eq('status', 'active');
+
+      // 4. Fetch count of pending withdrawals
+      const { count: pendingWithdrawalsCount } = await supabase
+        .from('withdrawals')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      setStats({
+        totalSales,
+        platformEarnings,
+        activeAgentsCount: activeAgentsCount || 0,
+        pendingWithdrawalsCount: pendingWithdrawalsCount || 0
+      });
+
+      // 5. Fetch pending agents list
+      const { data: dbPendingAgents } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'agent')
+        .eq('status', 'pending');
+
+      setPendingAgents(dbPendingAgents || []);
+
+      // 6. Fetch pending withdrawals list
+      const { data: dbPendingWithdrawals } = await supabase
+        .from('withdrawals')
+        .select('*, users(name, email)')
+        .eq('status', 'pending');
+
+      const formattedWithdrawals = (dbPendingWithdrawals || []).map((w: any) => ({
+        id: w.id,
+        agent: w.users?.name || 'Unknown Agent',
+        agentEmail: w.users?.email || '',
+        amount: Number(w.amount_requested),
+        net: Number(w.payout_amount),
+        commission: Number(w.amount_requested) - Number(w.payout_amount),
+        status: w.status,
+        momo: `${w.momo_number} (${w.network})`
+      }));
+
+      setWithdrawals(formattedWithdrawals);
+    } catch (err) {
+      console.error("Error fetching admin stats:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
-  const handleApproveAgent = (id: string) => {
-    const updated = agents.map(agent => 
-      agent.id === id ? { ...agent, status: 'active' } : agent
-    );
-    setAgents(updated);
-    localStorage.setItem("patrickhub_users", JSON.stringify(updated));
+  const handleApproveAgent = async (id: string, name: string, email: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('users')
+        .update({ status: 'active' })
+        .eq('id', id);
 
-    const activeCount = updated.filter((u: any) => u.status === 'active').length;
-    setStats(prev => ({
-      ...prev,
-      activeAgentsCount: activeCount
-    }));
+      if (error) throw error;
+      
+      await sendAgentApprovalNotification(name, email);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Error approving agent");
+    }
   };
 
-  const handleRejectAgent = (id: string) => {
-    const updated = agents.filter(agent => agent.id !== id);
-    setAgents(updated);
-    localStorage.setItem("patrickhub_users", JSON.stringify(updated));
+  const handleRejectAgent = async (id: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('users')
+        .update({ status: 'suspended' })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Error rejecting/suspending agent");
+    }
   };
 
-  const pendingAgents = agents.filter(agent => agent.status === 'pending');
+  const handleApproveWithdrawal = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number, commission: number) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('withdrawals')
+        .update({ status: 'approved' })
+        .eq('id', id);
 
-  const WITHDRAWALS = [
-    { id: "w1", agent: "Kofi Tech", amount: 500.00, net: 475.00, commission: 25.00, status: "pending" },
-  ];
+      if (error) throw error;
+
+      await sendWithdrawalProcessedNotification(agentEmail, agentName, reqAmount, payout, commission);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Error approving withdrawal");
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-[1200px] mx-auto pb-24 lg:pb-8">
@@ -237,7 +337,7 @@ export default function AdminDashboard() {
                         <XCircle className="h-3.5 w-3.5" /> Reject
                       </button>
                       <button 
-                        onClick={() => handleApproveAgent(agent.id)}
+                        onClick={() => handleApproveAgent(agent.id, agent.name, agent.email)}
                         className="h-7 px-3 bg-[#16A34A] text-white hover:bg-[#15803D] rounded-md text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-0 shadow-sm"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" /> Approve
@@ -259,40 +359,54 @@ export default function AdminDashboard() {
 
           {/* List Content */}
           <div className="flex-1 flex flex-col min-h-[160px]">
-            <div className="space-y-3.5">
-              {WITHDRAWALS.map((w) => (
-                <div key={w.id} className="flex flex-col gap-3.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors">
-                  {/* Top Row: Agent Info + Commission Badge */}
-                  <div className="flex items-center justify-between gap-3 w-full">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#F0FDF4] text-[#15803D] flex items-center justify-center font-bold text-xs shrink-0 uppercase tracking-wide shadow-sm">
-                        {w.agent ? w.agent.charAt(0) : "K"}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-[#111827] leading-tight truncate">{w.agent}</p>
-                        <p className="text-[11px] text-[#9CA3AF] leading-none mt-0.5">Agent Partner</p>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-[10px] uppercase tracking-wider text-[#EF4444] font-bold bg-[#FEF2F2] border border-[#FEE2E2] px-2 py-0.5 rounded-full inline-block">
-                        Fee: -{formatCurrency(w.commission)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bottom Row: Net Payout Amount + Action Button */}
-                  <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]/50 gap-4 w-full">
-                    <div className="min-w-0">
-                      <span className="text-[10px] uppercase tracking-wider text-[#6B7280] font-semibold block leading-none">Net Payout</span>
-                      <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
-                    </div>
-                    <button className="h-7.5 px-3 bg-white border border-[#D1D5DB] hover:border-[#16A34A] hover:bg-[#F0FDF4] hover:text-[#15803D] text-[#374151] rounded-lg text-[12px] font-semibold transition-colors cursor-pointer min-h-0 flex items-center justify-center shrink-0">
-                      Process Payout
-                    </button>
-                  </div>
+            {withdrawals.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] mb-3 border border-[#E5E7EB]">
+                  <Clock className="h-5 w-5" />
                 </div>
-              ))}
-            </div>
+                <p className="text-[13px] text-[#6B7280] font-normal">
+                  No pending withdrawals at the moment.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {withdrawals.map((w) => (
+                  <div key={w.id} className="flex flex-col gap-3.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors">
+                    {/* Top Row: Agent Info + Commission Badge */}
+                    <div className="flex items-center justify-between gap-3 w-full">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[#F0FDF4] text-[#15803D] flex items-center justify-center font-bold text-xs shrink-0 uppercase tracking-wide shadow-sm">
+                          {w.agent ? w.agent.charAt(0) : "K"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-[#111827] leading-tight truncate">{w.agent}</p>
+                          <p className="text-[11px] text-[#9CA3AF] leading-none mt-0.5">Agent Partner</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] uppercase tracking-wider text-[#EF4444] font-bold bg-[#FEF2F2] border border-[#FEE2E2] px-2 py-0.5 rounded-full inline-block">
+                          Fee: -{formatCurrency(w.commission)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Net Payout Amount + Action Button */}
+                    <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]/50 gap-4 w-full">
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase tracking-wider text-[#6B7280] font-semibold block leading-none">Net Payout</span>
+                        <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
+                      </div>
+                      <button 
+                        onClick={() => handleApproveWithdrawal(w.id, w.agent, w.agentEmail, w.amount, w.net, w.commission)}
+                        className="h-7.5 px-3 bg-white border border-[#D1D5DB] hover:border-[#16A34A] hover:bg-[#F0FDF4] hover:text-[#15803D] text-[#374151] rounded-lg text-[12px] font-semibold transition-colors cursor-pointer min-h-0 flex items-center justify-center shrink-0"
+                      >
+                        Process Payout
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

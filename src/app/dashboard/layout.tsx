@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   LayoutDashboard,
   Package,
@@ -14,11 +14,53 @@ import {
   Globe
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [userInitials, setUserInitials] = useState("A");
+  const [userName, setUserName] = useState("Agent");
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile?.name) {
+            setUserName(profile.name);
+            const parts = profile.name.trim().split(/\s+/);
+            const initials = parts.map((p: string) => p.charAt(0)).join("").substring(0, 2).toUpperCase();
+            setUserInitials(initials || "A");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading user initials:", err);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
+      router.push("/login");
+    }
+  };
 
   const isActive = (path: string) => {
     if (path === "/dashboard") return pathname === "/dashboard";
@@ -31,10 +73,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col h-screen sticky top-0 shrink-0">
         <div className="p-6">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-primary rounded-lg flex items-center justify-center text-white font-bold">
-              P
+            <div className="w-8 h-8 bg-brand-primary rounded-lg flex items-center justify-center text-white font-bold text-xs">
+              PI
             </div>
-            <span className="text-xl font-bold text-slate-900">PatrickHub</span>
+            <span className="text-xl font-bold text-slate-900">Patrick's Info Tech</span>
           </Link>
         </div>
         
@@ -104,10 +146,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <Link href="/login" className="flex items-center gap-3 px-4 py-3 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer text-left"
+          >
             <LogOut className="h-5 w-5" />
             Logout
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -123,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
               <Link href="/dashboard/store-settings" className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 hover:ring-2 hover:ring-brand-primary hover:ring-offset-2 transition-all">
-                KT
+                {userInitials}
               </Link>
             </div>
           </div>
@@ -216,14 +261,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Back to Homepage
               </Link>
               <hr className="border-slate-100 my-2" />
-              <Link 
-                href="/login" 
-                onClick={() => setShowMoreMenu(false)}
-                className="flex items-center gap-4 p-4 hover:bg-red-50 text-red-600 rounded-xl transition-all font-bold min-h-[48px]"
+              <button 
+                onClick={(e) => {
+                  setShowMoreMenu(false);
+                  handleLogout(e);
+                }}
+                className="flex items-center gap-4 p-4 hover:bg-red-50 text-red-600 rounded-xl transition-all font-bold min-h-[48px] text-left w-full cursor-pointer"
               >
                 <LogOut className="h-5 w-5 shrink-0" />
                 Logout
-              </Link>
+              </button>
             </div>
           </div>
         </div>

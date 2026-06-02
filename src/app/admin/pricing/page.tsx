@@ -1,10 +1,63 @@
 "use client";
 
 import { Save, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase";
 
 export default function AdminPricing() {
   const [loading, setLoading] = useState(false);
+  const [transactionFee, setTransactionFee] = useState("0.20");
+  const [withdrawalCommission, setWithdrawalCommission] = useState("5.00");
+
+  const fetchConfig = async () => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('platform_config')
+        .select('*');
+      
+      if (error) throw error;
+      
+      if (data) {
+        const tf = data.find(c => c.key === 'transaction_fee');
+        const wc = data.find(c => c.key === 'withdrawal_commission');
+        if (tf) setTransactionFee(tf.value);
+        if (wc) setWithdrawalCommission(wc.value);
+      }
+    } catch (err) {
+      console.error("Error fetching config:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      
+      const { error: err1 } = await supabase
+        .from('platform_config')
+        .update({ value: transactionFee })
+        .eq('key', 'transaction_fee');
+
+      const { error: err2 } = await supabase
+        .from('platform_config')
+        .update({ value: withdrawalCommission })
+        .eq('key', 'withdrawal_commission');
+
+      if (err1 || err2) throw err1 || err2;
+
+      alert("Configuration saved successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Error saving configuration");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-[800px] mx-auto space-y-6 pb-24 lg:pb-8">
@@ -31,7 +84,8 @@ export default function AdminPricing() {
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] font-medium text-[13px]">GHS</span>
               <input 
                 type="number" 
-                defaultValue="0.20"
+                value={transactionFee}
+                onChange={(e) => setTransactionFee(e.target.value)}
                 step="0.01"
                 className="w-full h-full pl-12 pr-3 rounded-lg border border-[#E5E7EB] focus:border-[#16A34A] focus:outline-none text-[#111827] text-[14px] font-medium bg-white"
               />
@@ -52,7 +106,8 @@ export default function AdminPricing() {
             <div className="relative flex-1 h-9">
               <input 
                 type="number" 
-                defaultValue="5.00"
+                value={withdrawalCommission}
+                onChange={(e) => setWithdrawalCommission(e.target.value)}
                 step="0.1"
                 className="w-full h-full pl-3.5 pr-8 rounded-lg border border-[#E5E7EB] focus:border-[#16A34A] focus:outline-none text-[#111827] text-[14px] font-medium bg-white"
               />
@@ -72,10 +127,8 @@ export default function AdminPricing() {
         {/* Action Button */}
         <button 
           className="w-full sm:w-auto h-9 px-4 bg-[#16A34A] text-white rounded-lg text-[13px] font-semibold hover:bg-[#15803D] active:scale-95 transition-all flex items-center justify-center gap-1.5 min-h-0 cursor-pointer shadow-sm shadow-green-600/10"
-          onClick={() => {
-            setLoading(true);
-            setTimeout(() => setLoading(false), 1000);
-          }}
+          onClick={handleSave}
+          disabled={loading}
         >
           <Save className="w-4 h-4 shrink-0" />
           <span>{loading ? "Saving..." : "Save Configuration"}</span>

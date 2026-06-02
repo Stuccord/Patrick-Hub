@@ -3,23 +3,12 @@
 import React, { useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/pricing";
 import { Phone, ArrowRight, Zap, Loader2, ArrowLeft, ShieldCheck, CheckCircle2 } from "lucide-react";
-
-const DEFAULT_AGENT = {
-  name: "Kofi's Data Shop",
-  username: "kofi-tech",
-  tagline: "High-speed data at wholesale rates, instantly delivered."
-};
-
-const DEFAULT_BUNDLES = [
-  { id: "1", name: "MTN 1GB Data", network: "MTN", agent_price: 5.50, platform_fee: 0.20 },
-  { id: "2", name: "MTN 2GB Data", network: "MTN", agent_price: 10.00, platform_fee: 0.20 },
-  { id: "3", name: "Vodafone 5GB Data", network: "Vodafone", agent_price: 22.00, platform_fee: 0.20 },
-  { id: "4", name: "AirtelTigo 10GB Data", network: "AirtelTigo", agent_price: 40.00, platform_fee: 0.20 },
-];
+import { createClient } from "@/lib/supabase";
 
 export default function StoreClient({ slug }: { slug: string }) {
   const [agent, setAgent] = useState<any>(null);
-  const [bundles, setBundles] = useState<any[]>(DEFAULT_BUNDLES);
+  const [bundles, setBundles] = useState<any[]>([]);
+  const [platformFee, setPlatformFee] = useState(0.20);
 
   // Flow State: 1 = Select Bundle, 2 = Recipient Info, 3 = Summary, 4 = MoMo Payment, 5 = Success
   const [step, setStep] = useState(1);
@@ -32,21 +21,53 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [reference, setReference] = useState("");
 
   useEffect(() => {
-    const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-    const found = localUsers.find((u: any) => u.username === slug);
-    if (found) {
-      setAgent({
-        name: found.name,
-        username: found.username,
-        tagline: found.tagline || "Affordable data packages, sent instantly."
-      });
-    } else {
-      setAgent({
-        name: slug.charAt(0).toUpperCase() + slug.slice(1) + "'s Store",
-        username: slug,
-        tagline: DEFAULT_AGENT.tagline
-      });
+    async function fetchData() {
+      const supabase = createClient();
+      
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, store_name, store_description, name, username')
+        .eq('username', slug)
+        .eq('status', 'active')
+        .single();
+
+      if (userData) {
+        setAgent({
+          id: userData.id,
+          name: userData.store_name || userData.name,
+          username: userData.username,
+          tagline: userData.store_description || "Affordable data packages, sent instantly."
+        });
+
+        const { data: bundlesData } = await supabase.from('bundles').select('*').eq('is_active', true);
+        const { data: agentBundlesData } = await supabase.from('agent_bundles').select('*').eq('agent_id', userData.id);
+        const { data: configData } = await supabase.from('platform_config').select('value').eq('key', 'transaction_fee').single();
+        
+        const currentFee = configData ? Number(configData.value) : 0.20;
+        setPlatformFee(currentFee);
+
+        if (bundlesData) {
+          const merged = bundlesData.map(b => {
+            const custom = agentBundlesData?.find(ab => ab.bundle_id === b.id);
+            return {
+              ...b,
+              agent_price: custom ? Number(custom.selling_price) : Number(b.min_resell_price),
+              base_cost: Number(b.base_price)
+            };
+          });
+          setBundles(merged);
+        }
+      } else {
+        // Fallback for not found or not active
+        setAgent({
+          id: null,
+          name: "Store Not Found",
+          username: slug,
+          tagline: "This store is either inactive or does not exist."
+        });
+      }
     }
+    fetchData();
   }, [slug]);
 
   const handleBundleSelect = (bundle: any) => {
@@ -61,41 +82,49 @@ export default function StoreClient({ slug }: { slug: string }) {
     setStep(3);
   };
 
-  const handlePay = () => {
-    setIsLoading(true);
-    const ref = "DH-" + Math.floor(100000 + Math.random() * 900000);
-    setReference(ref);
+  const handlePay = async () => {
+    if (!agent.id || !selectedBundle) return;
     
-    setTimeout(() => {
-      setIsLoading(false);
-      setStep(4);
-    }, 1200);
-  };
+    setIsLoading(true);
+    const dummyEmail = `${phone.replace(/\s+/g, '')}@patricks-info-tech.com`;
+    const amountInPesewas = Math.round((selectedBundle.agent_price + platformFee) * 100);
 
-  const handleConfirmPin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin.length < 4) return;
-    setIsLoading(true);
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-      const profit = selectedBundle.agent_price - (selectedBundle.base_cost || selectedBundle.agent_price * 0.8);
-      
-      const updated = localUsers.map((u: any) => {
-        if (u.username === slug) {
-          return {
-            ...u,
-            wallet: (u.wallet || 0) + profit
-          };
+    try {
+      const PaystackPop = (await import('@paystack/inline-js')).default;
+      const paystack = new PaystackPop();
+      paystack.newTransaction({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+        email: dummyEmail,
+        amount: amountInPesewas,
+        currency: "GHS",
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Customer Phone",
+              variable_name: "customer_phone",
+              value: phone
+            }
+          ],
+          agent_id: agent.id,
+          bundle_id: selectedBundle.id,
+          customer_phone: phone,
+          customer_paid: (selectedBundle.agent_price + platformFee).toString(),
+          platform_fee: platformFee.toString()
+        },
+        onSuccess: (transaction: any) => {
+          setReference(transaction.reference);
+          setIsLoading(false);
+          setStep(5); // Show success screen immediately, webhook handles backend
+        },
+        onCancel: () => {
+          setIsLoading(false);
         }
-        return u;
       });
-      
-      localStorage.setItem("patrickhub_users", JSON.stringify(updated));
-      setStep(5);
-    }, 1800);
+    } catch (err) {
+      console.error("Error loading Paystack:", err);
+      setIsLoading(false);
+      alert("Could not load payment gateway. Please try again.");
+    }
   };
 
   if (!agent) {
@@ -176,7 +205,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                         <div className="text-xl font-black text-brand-primary">
                           {formatCurrency(bundle.agent_price)}
                         </div>
-                        <p className="text-[9px] text-slate-400 font-extrabold uppercase">Plus GHS {bundle.platform_fee.toFixed(2)} Fee</p>
+                        <p className="text-[9px] text-slate-400 font-extrabold uppercase">Plus GHS {platformFee.toFixed(2)} Fee</p>
                       </div>
                     </div>
                     <button 
@@ -295,12 +324,12 @@ export default function StoreClient({ slug }: { slug: string }) {
                 </div>
                 <div className="flex justify-between text-slate-500 pb-2.5">
                   <span>Platform Fee:</span>
-                  <span>{formatCurrency(selectedBundle.platform_fee)}</span>
+                  <span>{formatCurrency(platformFee)}</span>
                 </div>
                 <div className="border-t-2 border-dotted border-slate-300 pt-3 flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-900">Total Payable:</span>
                   <span className="font-black text-brand-primary text-xl">
-                    {formatCurrency(selectedBundle.agent_price + selectedBundle.platform_fee)}
+                    {formatCurrency(selectedBundle.agent_price + platformFee)}
                   </span>
                 </div>
               </div>
@@ -323,49 +352,7 @@ export default function StoreClient({ slug }: { slug: string }) {
           </div>
         )}
 
-        {/* STEP 4: MoMo PIN Mock UI */}
-        {step === 4 && selectedBundle && (
-          <div className="space-y-6">
-            <div className="space-y-2 text-center">
-              <h2 className="text-2xl font-black text-slate-900">Authorize Payment</h2>
-              <p className="text-slate-500 text-sm leading-relaxed">Enter your Mobile Money PIN below to approve request.</p>
-            </div>
 
-            <form onSubmit={handleConfirmPin} className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-6 max-w-sm mx-auto">
-              <div className="text-center space-y-1 bg-brand-light border border-brand-primary/10 p-4 rounded-2xl">
-                <span className="text-[10px] uppercase font-black tracking-widest text-brand-primary">Total Payable</span>
-                <h3 className="text-2xl font-black text-brand-dark">
-                  {formatCurrency(selectedBundle.agent_price + selectedBundle.platform_fee)}
-                </h3>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs sm:text-sm font-bold text-slate-700 block text-center">Enter 4-Digit MoMo PIN</label>
-                <input 
-                  type="password" 
-                  maxLength={4}
-                  required
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="••••"
-                  className="w-36 mx-auto text-center py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none font-bold text-2xl tracking-widest block bg-white"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                disabled={isLoading || pin.length < 4}
-                className="w-full bg-brand-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-dark transition-all disabled:opacity-50 min-h-[48px] btn-animate shadow-lg shadow-brand-primary/20 text-sm"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  "Confirm Authorization"
-                )}
-              </button>
-            </form>
-          </div>
-        )}
 
         {/* STEP 5: Success Screen (Centered, Celebratory, Clear Ref) */}
         {step === 5 && selectedBundle && (
@@ -413,7 +400,7 @@ export default function StoreClient({ slug }: { slug: string }) {
       {/* Footer */}
       <footer className="py-6 text-center border-t border-slate-200 bg-white">
         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-          Powered by <span className="text-slate-600 font-extrabold">PatrickHub Platform</span>
+          Powered by <span className="text-slate-600 font-extrabold">Patrick's Info Tech Platform</span>
         </p>
       </footer>
     </div>

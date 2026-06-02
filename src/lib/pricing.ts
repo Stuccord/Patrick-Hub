@@ -1,5 +1,5 @@
 /**
- * PatrickHub Pricing Engine
+ * Patrick's Info Tech Pricing Engine
  * Logic:
  * 1. Base Cost (B) - Price Admin charges the Agent.
  * 2. Agent Price (A) - Price Agent sets for the Customer.

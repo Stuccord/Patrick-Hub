@@ -3,27 +3,78 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Search, Filter, Store, Trash2, Mail, Phone as PhoneIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/pricing";
+import { createClient } from "@/lib/supabase";
+import { sendAgentApprovalNotification } from "@/lib/emails";
 
 export default function AdminAgents() {
   const [agents, setAgents] = useState<any[]>([]);
 
-  useEffect(() => {
-    const localUsers = JSON.parse(localStorage.getItem("patrickhub_users") || "[]");
-    setAgents(localUsers);
-  }, []);
+  function getAgentBalance(agent: any): number {
+    if (!agent.wallets) return 0;
+    if (Array.isArray(agent.wallets)) {
+      return Number(agent.wallets[0]?.balance) || 0;
+    }
+    return Number(agent.wallets.balance) || 0;
+  }
 
-  const updateStatus = (id: string, newStatus: string) => {
-    const updated = agents.map(agent => 
-      agent.id === id ? { ...agent, status: newStatus } : agent
-    );
-    setAgents(updated);
-    localStorage.setItem("patrickhub_users", JSON.stringify(updated));
+  const fetchAgents = async () => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('users')
+        .select('*, wallets(balance)')
+        .eq('role', 'agent')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setAgents(data || []);
+    } catch (err) {
+      console.error("Error fetching agents:", err);
+    }
   };
 
-  const deleteAgent = (id: string) => {
-    const updated = agents.filter(agent => agent.id !== id);
-    setAgents(updated);
-    localStorage.setItem("patrickhub_users", JSON.stringify(updated));
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('users')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (newStatus === 'active') {
+        const agent = agents.find(a => a.id === id);
+        if (agent) {
+          await sendAgentApprovalNotification(agent.name, agent.email);
+        }
+      }
+
+      fetchAgents();
+    } catch (err) {
+      console.error(err);
+      alert("Error updating agent status");
+    }
+  };
+
+  const deleteAgent = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this agent? This will permanently delete their account and history.")) return;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      fetchAgents();
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting agent");
+    }
   };
 
   return (
@@ -93,7 +144,7 @@ export default function AdminAgents() {
                       {agent.status === 'pending' && <span className="inline-flex items-center px-2.5 py-0.5 bg-[#FFFBEB] text-[#D97706] text-[11px] font-semibold rounded-full">Pending</span>}
                       {agent.status === 'suspended' && <span className="inline-flex items-center px-2.5 py-0.5 bg-[#FEF2F2] text-[#EF4444] text-[11px] font-semibold rounded-full">Suspended</span>}
                     </td>
-                    <td className="px-5 py-4 font-semibold text-[#111827] text-[14px]">GHS {(agent.wallet || 0).toFixed(2)}</td>
+                    <td className="px-5 py-4 font-semibold text-[#111827] text-[14px]">GHS {getAgentBalance(agent).toFixed(2)}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
                         {agent.status === 'pending' && (
@@ -168,7 +219,7 @@ export default function AdminAgents() {
 
                 <div className="bg-[#F9FAFB] border border-[#E5E7EB] p-2.5 rounded-lg flex items-center justify-between text-[12px]">
                   <span className="text-[#6B7280]">Wallet Balance:</span>
-                  <span className="font-semibold text-[#111827]">GHS {(agent.wallet || 0).toFixed(2)}</span>
+                  <span className="font-semibold text-[#111827]">GHS {getAgentBalance(agent).toFixed(2)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
