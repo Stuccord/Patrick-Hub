@@ -60,8 +60,9 @@ export default function AdminTransactions() {
       });
 
       setTransactions(allTxns);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching transactions:", err);
+      alert(`Error fetching transactions: ${err.message || err.details || err.toString()}`);
     }
   };
 

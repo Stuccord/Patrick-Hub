@@ -91,9 +91,9 @@ export default function AgentBundles() {
         setSaving(null);
         fetchBundlesAndPricing();
       }, 600);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error saving custom selling price");
+      alert(`Error saving custom selling price: ${err.message || err.details || err.toString()}`);
       setSaving(null);
     }
   };

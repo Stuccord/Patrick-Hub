@@ -103,11 +103,17 @@ export default function StoreClient({ slug }: { slug: string }) {
               display_name: "Customer Phone",
               variable_name: "customer_phone",
               value: phone
+            },
+            {
+              display_name: "Network",
+              variable_name: "network",
+              value: network
             }
           ],
           agent_id: agent.id,
           bundle_id: selectedBundle.id,
           customer_phone: phone,
+          customer_network: network,
           customer_paid: (selectedBundle.agent_price + platformFee).toString(),
           platform_fee: platformFee.toString()
         },

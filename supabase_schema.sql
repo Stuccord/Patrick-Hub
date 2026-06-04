@@ -24,9 +24,11 @@ CREATE TABLE bundles (
   network TEXT NOT NULL CHECK (network IN ('MTN', 'Vodafone', 'AirtelTigo')),
   base_price NUMERIC NOT NULL,
   min_resell_price NUMERIC NOT NULL,
+  cheapgigz_id TEXT,             -- Product ID from Cheap Gigz API for auto-fulfillment
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- For existing databases, run: ALTER TABLE bundles ADD COLUMN IF NOT EXISTS cheapgigz_id TEXT;
 
 -- Agent Bundles (Prices set by agents)
 CREATE TABLE agent_bundles (
@@ -44,6 +46,7 @@ CREATE TABLE orders (
   agent_id UUID REFERENCES users(id) ON DELETE SET NULL,
   bundle_id UUID REFERENCES bundles(id) ON DELETE SET NULL,
   customer_phone TEXT NOT NULL,
+  customer_network TEXT,               -- Network chosen by customer (MTN, Vodafone, AirtelTigo)
   customer_paid NUMERIC NOT NULL,
   agent_credited NUMERIC NOT NULL,
   platform_fee NUMERIC NOT NULL,

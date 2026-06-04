@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendAgentSaleNotification } from '@/lib/emails';
+import { placeCheapGigzOrder } from '@/lib/cheapgigz';
 
 // Webhook requires raw body for signature verification, but Next.js App Router exposes req.text()
 export async function POST(req: Request) {
@@ -52,10 +53,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ status: 'already processed' });
       }
 
-      // 1. Fetch agent and bundle info
+      // 1. Fetch agent and bundle info (including network and size for auto-lookup)
       const [userRes, bundleRes] = await Promise.all([
         supabase.from('users').select('id, name, email').eq('id', metadata.agent_id).single(),
-        supabase.from('bundles').select('name, base_price').eq('id', metadata.bundle_id).single()
+        supabase.from('bundles').select('name, base_price, cheapgigz_id, network, size_gb').eq('id', metadata.bundle_id).single()
       ]);
 
       if (userRes.error || bundleRes.error) {
@@ -67,60 +68,75 @@ export async function POST(req: Request) {
       const platformFee = Number(metadata.platform_fee);
       
       // agent price is the total customer paid minus the platform fee
-      const agentPrice = customerPaid - platformFee;
+      const agentPrice = Number((customerPaid - platformFee).toFixed(2));
       
       // profit is agent price minus base cost
-      const agentCredited = agentPrice - Number(bundleRes.data.base_price);
+      const agentCredited = Number((agentPrice - Number(bundleRes.data.base_price)).toFixed(2));
 
-      // 2. Create the order
+      // 2. Create the order with status 'pending'
       const { error: orderError } = await supabase.from('orders').insert([{
         agent_id: metadata.agent_id,
         bundle_id: metadata.bundle_id,
         customer_phone: metadata.customer_phone,
+        customer_network: metadata.customer_network || null,
         customer_paid: customerPaid,
         agent_credited: agentCredited,
         platform_fee: platformFee,
-        status: 'completed',
+        status: 'pending',
         reference: reference
       }]);
 
       if (orderError) throw orderError;
 
-      // 3. Update Agent Wallet
-      const { data: wallet, error: walletError } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('agent_id', metadata.agent_id)
-        .single();
-
-      if (walletError) throw walletError;
-
-      const newBalance = Number(wallet.balance) + agentCredited;
-      const { error: walletUpdateError } = await supabase
-        .from('wallets')
-        .update({ balance: newBalance })
-        .eq('agent_id', metadata.agent_id);
-
-      if (walletUpdateError) throw walletUpdateError;
-
-      // 4. Insert Wallet Transaction
-      const { error: txError } = await supabase.from('wallet_transactions').insert([{
-        agent_id: metadata.agent_id,
-        type: 'credit',
-        amount: agentCredited,
-        description: `Profit from sale: ${bundleRes.data.name} to ${metadata.customer_phone} (Ref: ${reference})`
-      }]);
-
-      if (txError) throw txError;
-
-      // 5. Send Email Notification
-      await sendAgentSaleNotification(
-        userRes.data.email,
-        userRes.data.name,
+      // 3. Attempt to automatically fulfill via Cheap Gigz
+      const result = await placeCheapGigzOrder(
         metadata.customer_phone,
-        bundleRes.data.name,
-        agentCredited
+        bundleRes.data.network,
+        Number(bundleRes.data.size_gb),
+        bundleRes.data.cheapgigz_id
       );
+
+        if (result.success) {
+          // Auto-fulfill: mark completed and credit agent wallet
+          await supabase
+            .from('orders')
+            .update({ status: 'completed' })
+            .eq('reference', reference);
+
+          // Credit agent wallet
+          const { data: wallet, error: walletError } = await supabase
+            .from('wallets')
+            .select('balance')
+            .eq('agent_id', metadata.agent_id)
+            .single();
+
+          if (!walletError && wallet) {
+            const newBalance = Number((Number(wallet.balance) + agentCredited).toFixed(2));
+            await supabase
+              .from('wallets')
+              .update({ balance: newBalance })
+              .eq('agent_id', metadata.agent_id);
+
+            await supabase.from('wallet_transactions').insert([{
+              agent_id: metadata.agent_id,
+              type: 'credit',
+              amount: agentCredited,
+              description: `Profit from sale: ${bundleRes.data.name} to ${metadata.customer_phone} (Ref: ${reference})`
+            }]);
+          }
+
+          // Send Email Notification
+          await sendAgentSaleNotification(
+            userRes.data.email,
+            userRes.data.name,
+            metadata.customer_phone,
+            bundleRes.data.name,
+            agentCredited
+          );
+        } else {
+          // Auto-fulfillment failed — order stays pending for manual admin action
+          console.warn('[Webhook] Cheap Gigz auto-fulfillment failed:', result.message);
+        }
 
       return NextResponse.json({ status: 'success' });
     }

@@ -14,7 +14,8 @@ import {
   X,
   LogOut,
   Activity,
-  Globe
+  Globe,
+  ShoppingBag
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -26,6 +27,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [adminName, setAdminName] = useState("Admin Central");
   const [adminInitials, setAdminInitials] = useState("AC");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [pendingAgentsCount, setPendingAgentsCount] = useState(0);
+  const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0);
+  const [hasNotifications, setHasNotifications] = useState(false);
 
   useEffect(() => {
     const fetchAdmin = async () => {
@@ -45,6 +50,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             const initials = parts.map((p: string) => p.charAt(0)).join("").substring(0, 2).toUpperCase();
             setAdminInitials(initials || "A");
           }
+
+          // Fetch counts for pending agent registration approvals and pending withdrawals
+          const { count: pendingAgents } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'agent')
+            .eq('status', 'pending');
+
+          const { count: pendingWithdrawals } = await supabase
+            .from('withdrawals')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'pending');
+
+          const agentsCount = pendingAgents || 0;
+          const withdrawalsCount = pendingWithdrawals || 0;
+
+          setPendingAgentsCount(agentsCount);
+          setPendingWithdrawalsCount(withdrawalsCount);
+          setHasNotifications(agentsCount > 0 || withdrawalsCount > 0);
         }
       } catch (err) {
         console.error("Error loading admin profile:", err);
@@ -127,6 +151,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Pricing
           </Link>
           <Link 
+            href="/admin/orders" 
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-[14px] transition-colors min-h-0 ${
+              isActive("/admin/orders") 
+                ? "bg-[#F0FDF4] text-[#16A34A] font-semibold" 
+                : "text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB]"
+            }`}
+          >
+            <ShoppingBag className="h-[20px] w-[20px] shrink-0" />
+            Orders
+          </Link>
+          <Link 
             href="/admin/withdrawals" 
             className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-[14px] transition-colors min-h-0 ${
               isActive("/admin/withdrawals") 
@@ -199,10 +234,63 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Right Area */}
           <div className="flex items-center gap-3 shrink-0">
             {/* Bell Icon (24px clickable space) */}
-            <button className="relative p-1.5 text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB] rounded-lg flex items-center justify-center min-h-0 transition-colors">
-              <Bell className="h-[20px] w-[20px]" />
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#EF4444] rounded-full"></span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-1.5 text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB] rounded-lg flex items-center justify-center min-h-0 transition-colors cursor-pointer"
+              >
+                <Bell className="h-[20px] w-[20px]" />
+                {hasNotifications && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#EF4444] rounded-full"></span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-900">System Notifications</h3>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {pendingAgentsCount === 0 && pendingWithdrawalsCount === 0 ? (
+                      <div className="p-6 text-center text-slate-500 text-sm">
+                        No pending items requiring attention
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-50">
+                        {pendingAgentsCount > 0 && (
+                          <Link 
+                            href="/admin/agents"
+                            onClick={() => setShowNotifications(false)}
+                            className="p-4 hover:bg-slate-50 transition-colors block text-left"
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              Pending Agent Approvals
+                            </p>
+                            <p className="text-xs text-[#6B7280] mt-1">
+                              {pendingAgentsCount} new agent(s) waiting for registration approval.
+                            </p>
+                          </Link>
+                        )}
+                        {pendingWithdrawalsCount > 0 && (
+                          <Link 
+                            href="/admin/withdrawals"
+                            onClick={() => setShowNotifications(false)}
+                            className="p-4 hover:bg-slate-50 transition-colors block text-left"
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              Pending Withdrawals
+                            </p>
+                            <p className="text-xs text-[#6B7280] mt-1">
+                              {pendingWithdrawalsCount} payout request(s) waiting to be processed.
+                            </p>
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="h-5 w-px bg-[#E5E7EB]"></div>
 
@@ -253,13 +341,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="text-[10px] font-medium">Agents</span>
           </Link>
           <Link 
-            href="/admin/bundles"
+            href="/admin/orders"
             className={`flex flex-col items-center justify-center py-1.5 gap-0.5 text-center transition-colors min-h-0 ${
-              isActive("/admin/bundles") ? "text-[#16A34A]" : "text-[#6B7280]"
+              isActive("/admin/orders") ? "text-[#16A34A]" : "text-[#6B7280]"
             }`}
           >
-            <Package className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Bundles</span>
+            <ShoppingBag className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Orders</span>
           </Link>
           <Link 
             href="/admin/withdrawals"

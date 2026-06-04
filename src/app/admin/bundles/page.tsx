@@ -17,6 +17,7 @@ export default function AdminBundles() {
   const [network, setNetwork] = useState("MTN");
   const [basePrice, setBasePrice] = useState("");
   const [minResellPrice, setMinResellPrice] = useState("");
+  const [cheapgigzId, setCheapgigzId] = useState("");
   const [isActive, setIsActive] = useState(true);
 
   const fetchBundles = async () => {
@@ -45,6 +46,7 @@ export default function AdminBundles() {
     setNetwork("MTN");
     setBasePrice("");
     setMinResellPrice("");
+    setCheapgigzId("");
     setIsActive(true);
     setIsModalOpen(true);
   };
@@ -56,6 +58,7 @@ export default function AdminBundles() {
     setNetwork(bundle.network);
     setBasePrice(bundle.base_price.toString());
     setMinResellPrice(bundle.min_resell_price.toString());
+    setCheapgigzId(bundle.cheapgigz_id ?? "");
     setIsActive(bundle.is_active);
     setIsModalOpen(true);
   };
@@ -91,6 +94,7 @@ export default function AdminBundles() {
         network,
         base_price: Number(basePrice),
         min_resell_price: Number(minResellPrice),
+        cheapgigz_id: cheapgigzId.trim() || null,
         is_active: isActive
       };
 
@@ -109,9 +113,9 @@ export default function AdminBundles() {
 
       setIsModalOpen(false);
       fetchBundles();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error saving bundle");
+      alert(`Error saving bundle: ${err.message || err.details || err.toString()}`);
     }
   };
 
@@ -366,6 +370,18 @@ export default function AdminBundles() {
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-1.5">Cheap Gigz Product ID</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. MTN_1GB_DATA (from Cheap Gigz)"
+                  value={cheapgigzId}
+                  onChange={(e) => setCheapgigzId(e.target.value)}
+                  className="w-full h-10 px-3 bg-white border border-[#E5E7EB] rounded-lg text-[13px] text-[#374151] placeholder-[#9CA3AF] focus:border-[#16A34A] focus:outline-none transition-colors font-mono"
+                />
+                <p className="text-[10px] text-[#9CA3AF] mt-1">The product ID from your Cheap Gigz dashboard. Used for auto-fulfillment.</p>
               </div>
 
               <div className="flex items-center gap-2 py-2">

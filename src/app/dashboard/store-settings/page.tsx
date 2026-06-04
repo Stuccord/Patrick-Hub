@@ -69,9 +69,9 @@ export default function StoreSettings() {
         .getPublicUrl(filePath);
 
       setFormData(prev => ({ ...prev, logoUrl: publicUrlData.publicUrl }));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error uploading logo:", err);
-      alert("Failed to upload logo. Ensure the 'logos' bucket exists and is public.");
+      alert(`Failed to upload logo: ${err.message || err.details || err.toString()}`);
     }
   };
 
@@ -87,7 +87,7 @@ export default function StoreSettings() {
         .update({
           store_name: formData.storeName,
           store_description: formData.tagline,
-          logo_url: formData.logoUrl
+          logo_url: formData.logoUrl || null
         })
         .eq('id', userId);
 
@@ -116,10 +116,11 @@ export default function StoreSettings() {
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div 
-              className="w-28 h-28 bg-slate-100 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 shrink-0 relative overflow-hidden group cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-            >
+            <div className="flex flex-col items-center gap-3 shrink-0">
+              <div 
+                className="w-28 h-28 bg-slate-100 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 relative overflow-hidden group cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
               {formData.logoUrl ? (
                 <img src={formData.logoUrl} alt="Store Logo" className="w-full h-full object-cover" />
               ) : (
@@ -131,6 +132,16 @@ export default function StoreSettings() {
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Upload className="w-5 h-5 text-white" />
               </div>
+            </div>
+            {formData.logoUrl && (
+              <button 
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, logoUrl: "" }))}
+                className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                Remove Logo
+              </button>
+            )}
             </div>
             <input 
               type="file" 

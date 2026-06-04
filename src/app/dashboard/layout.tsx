@@ -23,6 +23,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [userInitials, setUserInitials] = useState("A");
   const [userName, setUserName] = useState("Agent");
+  const [userLogo, setUserLogo] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -32,15 +36,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (user) {
           const { data: profile } = await supabase
             .from('users')
-            .select('name')
+            .select('name, logo_url')
             .eq('id', user.id)
             .single();
           
+          if (profile?.logo_url) setUserLogo(profile.logo_url);
           if (profile?.name) {
             setUserName(profile.name);
             const parts = profile.name.trim().split(/\s+/);
             const initials = parts.map((p: string) => p.charAt(0)).join("").substring(0, 2).toUpperCase();
             setUserInitials(initials || "A");
+          }
+
+          // Fetch notifications (recent wallet transactions)
+          const { data: txs } = await supabase
+            .from('wallet_transactions')
+            .select('*')
+            .eq('agent_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+            
+          if (txs) {
+            setNotifications(txs);
+            // Check if any are from the last 24 hours
+            const hasRecent = txs.some(tx => {
+              const txDate = new Date(tx.created_at);
+              const now = new Date();
+              return (now.getTime() - txDate.getTime()) < 24 * 60 * 60 * 1000;
+            });
+            setHasNewNotifications(hasRecent);
           }
         }
       } catch (err) {
@@ -163,12 +187,52 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center justify-between">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900">Agent Central</h2>
             <div className="flex items-center gap-3">
-              <button className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 relative flex items-center justify-center">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-              </button>
-              <Link href="/dashboard/store-settings" className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 hover:ring-2 hover:ring-brand-primary hover:ring-offset-2 transition-all">
-                {userInitials}
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 relative flex items-center justify-center"
+                >
+                  <Bell className="h-5 w-5" />
+                  {hasNewNotifications && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-900">Notifications</h3>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center text-slate-500 text-sm">
+                          No recent notifications
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-50">
+                          {notifications.map((tx) => (
+                            <div key={tx.id} className="p-4 hover:bg-slate-50 transition-colors">
+                              <p className="text-sm font-medium text-slate-900">
+                                {tx.type === 'credit' ? 'Wallet Credited' : 'Wallet Debited'}: GHS {Number(tx.amount).toFixed(2)}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">{tx.description}</p>
+                              <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                                {new Date(tx.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <Link href="/dashboard/store-settings" className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 hover:ring-2 hover:ring-brand-primary hover:ring-offset-2 transition-all overflow-hidden">
+                {userLogo ? (
+                  <img src={userLogo} alt="Profile Logo" className="w-full h-full object-cover" />
+                ) : (
+                  userInitials
+                )}
               </Link>
             </div>
           </div>
