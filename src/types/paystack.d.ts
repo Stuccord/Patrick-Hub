@@ -1,4 +1,4 @@
 declare module '@paystack/inline-js' {
-  const PaystackPop: any;
+  const PaystackPop: unknown;
   export default PaystackPop;
 }

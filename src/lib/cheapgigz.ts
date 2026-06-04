@@ -110,11 +110,11 @@ export async function placeCheapGigzOrder(
       message: data.message ?? data.error ?? `HTTP ${res.status}`,
       raw: data,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[CheapGigz] Network error:', err);
     return {
       success: false,
-      message: err?.message ?? 'Network error contacting Cheap Gigz',
+      message: err instanceof Error ? err.message : 'Network error contacting Cheap Gigz',
     };
   }
 }
