@@ -67,15 +67,25 @@ export default function AdminBundles() {
     if (!confirm("Are you sure you want to delete this bundle?")) return;
     try {
       const supabase = createClient();
+      
+      // Remove any agent pricing overrides first to avoid FK constraint errors
+      await supabase.from('agent_bundles').delete().eq('bundle_id', id);
+
       const { error } = await supabase
         .from('bundles')
         .delete()
         .eq('id', id);
-      if (error) throw error;
+        
+      if (error) {
+        if (error.code === '23503') {
+          throw new Error("Cannot delete bundle because it has existing orders. Please edit it and set to 'Inactive' instead.");
+        }
+        throw error;
+      }
       fetchBundles();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error deleting bundle");
+      alert(err.message || "Error deleting bundle");
     }
   };
 
