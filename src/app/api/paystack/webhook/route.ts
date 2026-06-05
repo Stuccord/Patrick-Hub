@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendAgentSaleNotification } from '@/lib/emails';
-import { placeCheapGigzOrder } from '@/lib/cheapgigz';
+import { placeDataHustleOrder } from '@/lib/datahustle';
 
 // Webhook requires raw body for signature verification, but Next.js App Router exposes req.text()
 export async function POST(req: Request) {
@@ -88,8 +88,8 @@ export async function POST(req: Request) {
 
       if (orderError) throw orderError;
 
-      // 3. Attempt to automatically fulfill via Cheap Gigz
-      const result = await placeCheapGigzOrder(
+      // 3. Attempt to automatically fulfill via DataHustle
+      const result = await placeDataHustleOrder(
         metadata.customer_phone,
         bundleRes.data.network,
         Number(bundleRes.data.size_gb),
@@ -135,7 +135,7 @@ export async function POST(req: Request) {
           );
         } else {
           // Auto-fulfillment failed — order stays pending for manual admin action
-          console.warn('[Webhook] Cheap Gigz auto-fulfillment failed:', result.message);
+          console.warn('[Webhook] DataHustle auto-fulfillment failed:', result.message);
         }
 
       return NextResponse.json({ status: 'success' });
