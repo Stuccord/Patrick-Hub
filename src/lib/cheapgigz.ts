@@ -75,11 +75,12 @@ export async function placeCheapGigzOrder(
   cheapgigzId?: string | null
 ): Promise<CheapGigzOrderResult> {
   // Resolve bundle_id: manual override takes priority, then auto-lookup
-  const bundleIdNum = cheapgigzId
-    ? Number(cheapgigzId)
+  const manualId = cheapgigzId ? Number(cheapgigzId) : null;
+  const bundleIdNum = (manualId && !isNaN(manualId))
+    ? manualId
     : getBundleId(network, sizeGb);
 
-  if (!bundleIdNum) {
+  if (!bundleIdNum || isNaN(bundleIdNum)) {
     return {
       success: false,
       message: `No Cheap Gigz bundle found for ${network} ${sizeGb}GB`,
