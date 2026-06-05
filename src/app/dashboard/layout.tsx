@@ -181,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0 h-screen overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0">
         {/* Header - Sticky */}
         <header className="bg-white border-b border-slate-200 px-4 py-4 lg:px-8 shrink-0">
           <div className="flex items-center justify-between">
@@ -239,7 +239,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Dynamic content scrollable area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           {children}
         </div>
       </main>
