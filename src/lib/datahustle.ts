@@ -36,7 +36,12 @@ export async function placeDataHustleOrder(
   capacityOverride?: string | null
 ): Promise<DataHustleOrderResult> {
   const dataHustleNetwork = mapNetworkToDataHustle(network);
-  const capacity = capacityOverride?.trim() || sizeGb.toString();
+  // DataHustle expects capacity as a plain number (GB), e.g. "1", "5", "10".
+  // Only use the override if it looks like a valid numeric capacity.
+  const override = capacityOverride?.trim();
+  const capacity = (override && /^\d+(\.\d+)?$/.test(override))
+    ? override
+    : sizeGb.toString();
 
   try {
     const apiKey = process.env.DATAHUSTLE_API_KEY;
@@ -48,18 +53,21 @@ export async function placeDataHustleOrder(
       };
     }
 
+    const payload = {
+      phoneNumber: phone,
+      network: dataHustleNetwork,
+      capacity: capacity,
+      gateway: 'wallet',
+    };
+    console.log('[DataHustle] Sending purchase request:', JSON.stringify(payload));
+
     const res = await fetch('https://api.datahustle.shop/api/developer/purchase', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey,
       },
-      body: JSON.stringify({
-        phoneNumber: phone,
-        network: dataHustleNetwork,
-        capacity: capacity,
-        gateway: 'wallet',
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
