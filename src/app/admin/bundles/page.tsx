@@ -109,11 +109,15 @@ export default function AdminBundles() {
       };
 
       if (editingBundle) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('bundles')
           .update(bundleData)
-          .eq('id', editingBundle.id);
+          .eq('id', editingBundle.id)
+          .select();
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error("Could not update the bundle. You might not have permission (RLS) or the record does not exist.");
+        }
       } else {
         const { error } = await supabase
           .from('bundles')
