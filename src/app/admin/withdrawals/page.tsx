@@ -30,21 +30,44 @@ export default function AdminWithdrawals() {
   }, []);
 
   const handleApprove = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number, commission: number) => {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('withdrawals')
-        .update({ status: 'approved' })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      await sendWithdrawalProcessedNotification(agentEmail, agentName, reqAmount, payout, commission);
-      fetchWithdrawals();
-    } catch (err) {
-      console.error(err);
-      alert("Error approving withdrawal");
+    if (!confirm(`Are you sure you want to approve this withdrawal request for ${formatCurrency(payout)}?`)) {
+      return;
     }
+
+    const processPayout = async (override: boolean = false) => {
+      try {
+        const response = await fetch('/api/admin/withdrawals/approve', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ withdrawalId: id, manualOverride: override }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to approve payout');
+        }
+
+        alert(override ? "Withdrawal marked as manually paid!" : "Payout processed successfully via Paystack!");
+        fetchWithdrawals();
+      } catch (err: any) {
+        console.error(err);
+        if (!override) {
+          const forceConfirm = confirm(
+            `Automated payout via Paystack failed:\n"${err.message}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
+          );
+          if (forceConfirm) {
+            await processPayout(true);
+          }
+        } else {
+          alert(`Error approving withdrawal: ${err.message}`);
+        }
+      }
+    };
+
+    await processPayout(false);
   };
 
   const handleReject = async (id: string, agentId: string, reqAmount: number) => {
