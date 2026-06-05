@@ -99,51 +99,72 @@ INSERT INTO platform_config (key, value) VALUES
 ('withdrawal_commission', '5.00');
 
 -- Row Level Security (RLS) Policies
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bundles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.agent_bundles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bundles            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_bundles      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallets            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.platform_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.withdrawals        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_config    ENABLE ROW LEVEL SECURITY;
+
+-- Helper Function: is_admin()
+-- SECURITY DEFINER allows it to bypass RLS on public.users,
+-- preventing infinite recursion when checking admin access.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users
+    WHERE id = auth.uid()
+      AND role = 'admin'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon;
 
 -- public.users Table Policies
 CREATE POLICY "Allow public select active users" ON public.users FOR SELECT USING (status = 'active');
 CREATE POLICY "Allow users insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Allow users select own profile" ON public.users FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Allow users update own profile" ON public.users FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-CREATE POLICY "Allow admins full access to users" ON public.users FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to users" ON public.users FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.bundles Table Policies
 CREATE POLICY "Allow public select active bundles" ON public.bundles FOR SELECT USING (is_active = true);
-CREATE POLICY "Allow admins full access to bundles" ON public.bundles FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to bundles" ON public.bundles FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.agent_bundles Table Policies
 CREATE POLICY "Allow public select agent bundles" ON public.agent_bundles FOR SELECT USING (true);
-CREATE POLICY "Allow agents to manage own bundles" ON public.agent_bundles FOR ALL USING (agent_id = auth.uid());
-CREATE POLICY "Allow admins full access to agent bundles" ON public.agent_bundles FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow agents to manage own bundles" ON public.agent_bundles FOR ALL USING (agent_id = auth.uid()) WITH CHECK (agent_id = auth.uid());
+CREATE POLICY "Allow admins full access to agent bundles" ON public.agent_bundles FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.orders Table Policies
 CREATE POLICY "Allow agents to select own orders" ON public.orders FOR SELECT USING (agent_id = auth.uid());
-CREATE POLICY "Allow admins full access to orders" ON public.orders FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to orders" ON public.orders FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.wallets Table Policies
 CREATE POLICY "Allow agents select own wallet" ON public.wallets FOR SELECT USING (agent_id = auth.uid());
 CREATE POLICY "Allow agents insert own wallet" ON public.wallets FOR INSERT WITH CHECK (agent_id = auth.uid());
 CREATE POLICY "Allow agents update own wallet" ON public.wallets FOR UPDATE USING (agent_id = auth.uid()) WITH CHECK (agent_id = auth.uid());
-CREATE POLICY "Allow admins full access to wallets" ON public.wallets FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to wallets" ON public.wallets FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.wallet_transactions Table Policies
 CREATE POLICY "Allow agents select own transactions" ON public.wallet_transactions FOR SELECT USING (agent_id = auth.uid());
 CREATE POLICY "Allow agents insert own transactions" ON public.wallet_transactions FOR INSERT WITH CHECK (agent_id = auth.uid() AND type = 'debit');
-CREATE POLICY "Allow admins full access to transactions" ON public.wallet_transactions FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to transactions" ON public.wallet_transactions FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.withdrawals Table Policies
 CREATE POLICY "Allow agents select own withdrawals" ON public.withdrawals FOR SELECT USING (agent_id = auth.uid());
 CREATE POLICY "Allow agents insert own withdrawals" ON public.withdrawals FOR INSERT WITH CHECK (agent_id = auth.uid() AND status = 'pending');
-CREATE POLICY "Allow admins full access to withdrawals" ON public.withdrawals FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to withdrawals" ON public.withdrawals FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- public.platform_config Table Policies
 CREATE POLICY "Allow public select platform config" ON public.platform_config FOR SELECT USING (true);
-CREATE POLICY "Allow admins full access to platform config" ON public.platform_config FOR ALL USING (((auth.jwt() -> 'user_metadata') ->> 'role') = 'admin');
+CREATE POLICY "Allow admins full access to platform config" ON public.platform_config FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
