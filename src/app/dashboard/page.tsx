@@ -10,10 +10,16 @@ import {
   Copy,
   ArrowDownToLine,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  ArrowRight,
+  BarChart2
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
+import { format } from "date-fns";
 
 export default function AgentDashboard() {
   const [agent, setAgent] = useState<any>({
@@ -25,8 +31,12 @@ export default function AgentDashboard() {
   });
   const [stats, setStats] = useState({
     totalOrders: 0,
+    completedOrders: 0,
+    totalProfit: 0.00,
     monthlyProfit: 0.00
   });
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
   const [host, setHost] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
@@ -54,20 +64,26 @@ export default function AgentDashboard() {
       if (profileError) throw profileError;
 
       // 2. Fetch wallet
-      const { data: wallet, error: walletError } = await supabase
+      const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
         .eq('agent_id', user.id)
         .single();
 
       // 3. Fetch total completed orders count
-      const { count: totalOrders } = await supabase
+      const { count: completedOrders } = await supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .eq('agent_id', user.id)
         .eq('status', 'completed');
 
-      // 4. Fetch monthly profit
+      // 4. Fetch total orders count (all statuses)
+      const { count: totalOrders } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id);
+
+      // 5. Fetch monthly profit
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
       const { data: monthlyOrders } = await supabase
         .from('orders')
@@ -77,6 +93,34 @@ export default function AgentDashboard() {
         .gte('created_at', startOfMonth);
 
       const monthlyProfit = (monthlyOrders || []).reduce((acc, o) => acc + Number(o.agent_credited), 0);
+
+      // 6. Fetch all-time total profit
+      const { data: allOrders } = await supabase
+        .from('orders')
+        .select('agent_credited')
+        .eq('agent_id', user.id)
+        .eq('status', 'completed');
+
+      const totalProfit = (allOrders || []).reduce((acc, o) => acc + Number(o.agent_credited), 0);
+
+      // 7. Fetch recent 5 orders for quick display
+      const { data: recent } = await supabase
+        .from('orders')
+        .select('*, bundles(name)')
+        .eq('agent_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      setRecentOrders(recent || []);
+
+      // 8. Fetch pending withdrawals count
+      const { count: pendingW } = await supabase
+        .from('withdrawals')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', user.id)
+        .eq('status', 'pending');
+
+      setPendingWithdrawals(pendingW || 0);
 
       const username = profile?.username || "";
       setAgent({
@@ -89,6 +133,8 @@ export default function AgentDashboard() {
 
       setStats({
         totalOrders: totalOrders || 0,
+        completedOrders: completedOrders || 0,
+        totalProfit,
         monthlyProfit
       });
     } catch (err) {
@@ -143,15 +189,18 @@ export default function AgentDashboard() {
         </div>
       </div>
 
-      {/* Stats Grid - Large balance card prominent on mobile */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-4">
         <div className="card-premium relative overflow-hidden group bg-gradient-to-br from-white to-brand-light/35 border-brand-primary/20">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <Wallet className="h-12 w-12" />
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1">Wallet Balance</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(agent.wallet || 0)}</h3>
-          <Link href="/dashboard/wallet" className="mt-4 text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline w-fit min-h-[36px]">
+          <p className="text-xs font-medium text-slate-500 mb-1">Wallet Balance</p>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900">{formatCurrency(agent.wallet || 0)}</h3>
+          {pendingWithdrawals > 0 && (
+            <p className="text-amber-500 text-[10px] font-bold mt-1">{pendingWithdrawals} payout pending</p>
+          )}
+          <Link href="/dashboard/wallet" className="mt-3 text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline w-fit min-h-[36px]">
             Request Withdrawal <ArrowDownToLine className="h-3 w-3" />
           </Link>
         </div>
@@ -160,10 +209,11 @@ export default function AgentDashboard() {
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <TrendingUp className="h-12 w-12" />
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1">Total Orders</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalOrders}</h3>
-          <Link href="/dashboard/orders" className="mt-4 text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline w-fit min-h-[36px]">
-            View All Orders <ArrowDownToLine className="h-3 w-3 -rotate-90" />
+          <p className="text-xs font-medium text-slate-500 mb-1">Total Orders</p>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900">{stats.totalOrders}</h3>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">{stats.completedOrders} completed</p>
+          <Link href="/dashboard/orders" className="mt-3 text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline w-fit min-h-[36px]">
+            View All Orders <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
@@ -171,9 +221,18 @@ export default function AgentDashboard() {
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <Users className="h-12 w-12" />
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1">Profit This Month</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-brand-primary">{formatCurrency(stats.monthlyProfit)}</h3>
-          <p className="mt-4 text-[10px] sm:text-xs text-slate-400 font-bold leading-none">Net reseller earnings</p>
+          <p className="text-xs font-medium text-slate-500 mb-1">Profit This Month</p>
+          <h3 className="text-xl sm:text-2xl font-black text-brand-primary">{formatCurrency(stats.monthlyProfit)}</h3>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Net reseller earnings</p>
+        </div>
+
+        <div className="card-premium relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+            <BarChart2 className="h-12 w-12" />
+          </div>
+          <p className="text-xs font-medium text-slate-500 mb-1">All-Time Profit</p>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900">{formatCurrency(stats.totalProfit)}</h3>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Since account opened</p>
         </div>
       </div>
 
@@ -217,6 +276,107 @@ export default function AgentDashboard() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Recent Orders — Track Record */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-900 text-base">Recent Sales Record</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Your last 5 customer transactions</p>
+          </div>
+          <Link 
+            href="/dashboard/orders" 
+            className="text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline"
+          >
+            View All <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <div className="p-10 text-center">
+            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <TrendingUp className="w-5 h-5 text-slate-400" />
+            </div>
+            <p className="text-slate-400 font-medium text-sm">No orders yet.</p>
+            <p className="text-slate-400 text-xs mt-1">Share your store link to start receiving orders.</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Bundle</th>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Paid</th>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Your Profit</th>
+                    <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-3.5 text-slate-500 text-xs whitespace-nowrap">
+                        {format(new Date(order.created_at), "MMM d, HH:mm")}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-700 font-medium text-xs">{order.customer_phone}</td>
+                      <td className="px-5 py-3.5 text-slate-900 font-medium text-xs">{order.bundles?.name || 'Unknown Bundle'}</td>
+                      <td className="px-5 py-3.5 text-right font-bold text-slate-900 text-xs">{formatCurrency(order.customer_paid)}</td>
+                      <td className="px-5 py-3.5 text-right font-black text-brand-primary text-xs">{formatCurrency(order.agent_credited)}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        {order.status === 'completed' && (
+                          <span className="inline-flex items-center gap-1 text-green-700 bg-green-100 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                            <CheckCircle2 className="w-3 h-3" /> Done
+                          </span>
+                        )}
+                        {order.status === 'pending' && (
+                          <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                            <Clock className="w-3 h-3" /> Pending
+                          </span>
+                        )}
+                        {order.status === 'failed' && (
+                          <span className="inline-flex items-center gap-1 text-red-700 bg-red-100 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                            <XCircle className="w-3 h-3" /> Failed
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="sm:hidden divide-y divide-slate-100">
+              {recentOrders.map((order) => (
+                <div key={order.id} className="p-4 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">{order.bundles?.name || 'Bundle'}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{order.customer_phone} · {format(new Date(order.created_at), "MMM d, HH:mm")}</p>
+                    </div>
+                    {order.status === 'completed' && (
+                      <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded-full text-[10px] font-bold">Done</span>
+                    )}
+                    {order.status === 'pending' && (
+                      <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px] font-bold">Pending</span>
+                    )}
+                    {order.status === 'failed' && (
+                      <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded-full text-[10px] font-bold">Failed</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 rounded-xl p-2.5 text-xs">
+                    <span className="text-slate-500">Customer paid: <span className="font-bold text-slate-800">{formatCurrency(order.customer_paid)}</span></span>
+                    <span className="text-brand-primary font-black">+{formatCurrency(order.agent_credited)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

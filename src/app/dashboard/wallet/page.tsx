@@ -1,7 +1,9 @@
 "use client";
 
+import React from "react";
+
 import { formatCurrency } from "@/lib/pricing";
-import { Wallet, ArrowDownRight, ArrowUpRight, ArrowRight, ShieldAlert } from "lucide-react";
+import { Wallet, ArrowDownRight, ArrowUpRight, ArrowRight, ShieldAlert, Clock, CheckCircle2, XCircle, History, SendHorizonal } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { format } from "date-fns";
@@ -10,12 +12,14 @@ export default function AgentWallet() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [commissionRate, setCommissionRate] = useState(5);
   const [txnHistory, setTxnHistory] = useState<any[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
   const [amount, setAmount] = useState("");
   const [network, setNetwork] = useState("MTN");
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [historyTab, setHistoryTab] = useState<'transactions' | 'withdrawals'>('transactions');
 
   const fetchWalletData = async () => {
     try {
@@ -55,6 +59,17 @@ export default function AgentWallet() {
       if (txns) {
         setTxnHistory(txns);
       }
+
+      // Fetch withdrawal requests
+      const { data: withdrawals } = await supabase
+        .from('withdrawals')
+        .select('*')
+        .eq('agent_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (withdrawals) {
+        setWithdrawalRequests(withdrawals);
+      }
     } catch (err) {
       console.error("Error fetching wallet data:", err);
     } finally {
@@ -80,7 +95,6 @@ export default function AgentWallet() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Note: Ideally, we would use an RPC for a transactional guarantee.
       // 1. Insert pending withdrawal
       const { error: withdrawalError } = await supabase
         .from('withdrawals')
@@ -121,7 +135,8 @@ export default function AgentWallet() {
       setSuccess(true);
       setAmount("");
       setPhone("");
-      fetchWalletData(); // Refresh history
+      setHistoryTab('withdrawals'); // Switch to withdrawals tab after submission
+      fetchWalletData();
       
       setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
@@ -132,11 +147,13 @@ export default function AgentWallet() {
     }
   };
 
+  const pendingCount = withdrawalRequests.filter(w => w.status === 'pending').length;
+
   return (
     <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6 pb-24 lg:pb-8">
       <div>
         <h1 className="text-xl sm:text-2xl font-black text-slate-900">Wallet & Withdrawals</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage your earnings and request payouts.</p>
+        <p className="text-sm text-slate-500 mt-1">Manage your earnings and track your payouts.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -149,6 +166,12 @@ export default function AgentWallet() {
               <span className="font-bold text-sm">Available Balance</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black">{loading ? "..." : formatCurrency(walletBalance)}</h2>
+            {pendingCount > 0 && (
+              <p className="text-amber-400 text-xs font-bold mt-3 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                {pendingCount} withdrawal{pendingCount > 1 ? 's' : ''} awaiting approval
+              </p>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
@@ -156,8 +179,8 @@ export default function AgentWallet() {
             
             {success && (
               <div className="bg-green-50 text-green-700 p-4 rounded-xl text-xs sm:text-sm font-bold border border-green-200 mb-6 flex items-start gap-2">
-                <ArrowRight className="w-5 h-5 shrink-0" />
-                Withdrawal requested successfully! Awaiting admin approval.
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+                Withdrawal requested! Check the <button onClick={() => setHistoryTab('withdrawals')} className="underline cursor-pointer">Requests tab</button> to track its status.
               </div>
             )}
 
@@ -237,36 +260,140 @@ export default function AgentWallet() {
           </div>
         </div>
 
-        {/* Transaction History */}
+        {/* History Panel */}
         <div className="lg:col-span-2">
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-base sm:text-lg">Wallet History</h3>
+            {/* Tab Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  onClick={() => setHistoryTab('transactions')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                    historyTab === 'transactions'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Wallet History
+                </button>
+                <button
+                  onClick={() => setHistoryTab('withdrawals')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all relative ${
+                    historyTab === 'withdrawals'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <SendHorizonal className="w-3.5 h-3.5" />
+                  Withdrawal Requests
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center leading-none">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
+
+            {/* Tab Content */}
             <div className="divide-y divide-slate-100 flex-1">
-              {loading ? (
-                <div className="p-6 text-center text-slate-400 font-medium">Loading history...</div>
-              ) : txnHistory.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 font-medium">No transactions yet.</div>
-              ) : (
-                txnHistory.map((txn) => (
-                  <div key={txn.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        txn.type === 'credit' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                      }`}>
-                        {txn.type === 'credit' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-xs sm:text-sm leading-tight">{txn.description}</p>
-                        <p className="text-[10px] text-slate-500 mt-1">{format(new Date(txn.created_at), "MMM d, yyyy HH:mm")}</p>
-                      </div>
+              {historyTab === 'transactions' ? (
+                loading ? (
+                  <div className="p-6 text-center text-slate-400 font-medium">Loading history...</div>
+                ) : txnHistory.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Wallet className="w-5 h-5 text-slate-400" />
                     </div>
-                    <div className={`font-black text-xs sm:text-sm shrink-0 ${txn.type === 'credit' ? 'text-green-600' : 'text-slate-900'}`}>
-                      {txn.type === 'credit' ? '+' : '-'}{formatCurrency(Number(txn.amount))}
-                    </div>
+                    <p className="text-slate-400 font-medium text-sm">No transactions yet.</p>
                   </div>
-                ))
+                ) : (
+                  txnHistory.map((txn) => (
+                    <div key={txn.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                          txn.type === 'credit' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                        }`}>
+                          {txn.type === 'credit' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs sm:text-sm leading-tight">{txn.description}</p>
+                          <p className="text-[10px] text-slate-500 mt-1">{format(new Date(txn.created_at), "MMM d, yyyy HH:mm")}</p>
+                        </div>
+                      </div>
+                      <div className={`font-black text-xs sm:text-sm shrink-0 ${txn.type === 'credit' ? 'text-green-600' : 'text-slate-900'}`}>
+                        {txn.type === 'credit' ? '+' : '-'}{formatCurrency(Number(txn.amount))}
+                      </div>
+                    </div>
+                  ))
+                )
+              ) : (
+                /* Withdrawal Requests Tab */
+                loading ? (
+                  <div className="p-6 text-center text-slate-400 font-medium">Loading requests...</div>
+                ) : withdrawalRequests.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <SendHorizonal className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-slate-400 font-medium text-sm">No withdrawal requests yet.</p>
+                    <p className="text-slate-400 text-xs mt-1">Use the form to request a payout.</p>
+                  </div>
+                ) : (
+                  withdrawalRequests.map((w) => {
+                    const statusMap: Record<string, { label: string; icon: React.ElementType; color: string; bg: string; border: string }> = {
+                      pending: { label: 'Pending Approval', icon: Clock, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+                      approved: { label: 'Paid / Approved', icon: CheckCircle2, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                      rejected: { label: 'Rejected', icon: XCircle, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
+                    };
+                    const statusConfig = statusMap[w.status] || { label: w.status, icon: Clock, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' };
+
+                    const StatusIcon = statusConfig.icon;
+
+                    return (
+                      <div key={w.id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${statusConfig.bg}`}>
+                              <StatusIcon className={`w-5 h-5 ${statusConfig.color}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 text-sm leading-tight">
+                                {formatCurrency(Number(w.amount_requested))} → {w.network} {w.momo_number}
+                              </p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">{format(new Date(w.created_at), "MMM d, yyyy 'at' HH:mm")}</p>
+                              <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                                <span>Requested: <span className="font-semibold text-slate-700">{formatCurrency(Number(w.amount_requested))}</span></span>
+                                <span>·</span>
+                                <span>You receive: <span className="font-semibold text-green-700">{formatCurrency(Number(w.payout_amount))}</span></span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border shrink-0 ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                        {w.status === 'pending' && (
+                          <p className="text-[10px] text-amber-600 font-medium mt-2 pl-[52px]">
+                            ⏳ Your money is being processed — admin will send to your MoMo soon.
+                          </p>
+                        )}
+                        {w.status === 'approved' && (
+                          <p className="text-[10px] text-green-600 font-medium mt-2 pl-[52px]">
+                            ✅ Payment sent to {w.network} {w.momo_number}
+                          </p>
+                        )}
+                        {w.status === 'rejected' && (
+                          <p className="text-[10px] text-red-500 font-medium mt-2 pl-[52px]">
+                            ❌ This request was rejected. Contact support for more info.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
+                )
               )}
             </div>
           </div>
