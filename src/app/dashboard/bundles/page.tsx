@@ -157,7 +157,7 @@ export default function AgentBundles() {
                             value={bundle.agent_price}
                             step="0.1"
                             onChange={(e) => handlePriceChange(bundle.id, e.target.value)}
-                            className={`w-full pl-10 pr-3 py-2 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary ${isPriceTooLow ? 'border-red-300 text-red-600 focus:ring-red-500 bg-red-50' : 'border-slate-200 text-slate-900 bg-white'}`}
+                            className={`w-full pl-14 pr-3 py-2 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary ${isPriceTooLow ? 'border-red-300 text-red-600 focus:ring-red-500 bg-red-50' : 'border-slate-200 text-slate-900 bg-white'}`}
                           />
                         </div>
                         {isPriceTooLow && <p className="text-[10px] text-red-500 mt-1 absolute font-bold">Below minimum!</p>}
@@ -242,7 +242,7 @@ export default function AgentBundles() {
                         value={bundle.agent_price}
                         step="0.1"
                         onChange={(e) => handlePriceChange(bundle.id, e.target.value)}
-                        className={`w-full pl-14 pr-4 h-12 rounded-xl border font-bold text-base outline-none focus:ring-2 focus:ring-brand-primary ${isPriceTooLow ? 'border-red-300 text-red-600 focus:ring-red-500 bg-red-50' : 'border-slate-200 text-slate-900 bg-white'}`}
+                        className={`w-full pl-16 pr-4 h-12 rounded-xl border font-bold text-base outline-none focus:ring-2 focus:ring-brand-primary ${isPriceTooLow ? 'border-red-300 text-red-600 focus:ring-red-500 bg-red-50' : 'border-slate-200 text-slate-900 bg-white'}`}
                       />
                     </div>
                     {isPriceTooLow && <p className="text-[10px] text-red-500 font-bold">Price is below the allowed minimum resell rate!</p>}
