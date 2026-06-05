@@ -22,6 +22,7 @@ export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pendingAgents, setPendingAgents] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [withdrawalTab, setWithdrawalTab] = useState<'pending' | 'history'>('pending');
   const [stats, setStats] = useState({
     totalSales: 0.00,
     platformEarnings: 0.00,
@@ -84,13 +85,14 @@ export default function AdminDashboard() {
 
       setPendingAgents(dbPendingAgents || []);
 
-      // 6. Fetch pending withdrawals list
-      const { data: dbPendingWithdrawals } = await supabase
+      // 6. Fetch recent withdrawals list (both pending and processed)
+      const { data: dbWithdrawals } = await supabase
         .from('withdrawals')
         .select('*, users(name, email)')
-        .eq('status', 'pending');
+        .order('created_at', { ascending: false })
+        .limit(30);
 
-      const formattedWithdrawals = (dbPendingWithdrawals || []).map((w: any) => ({
+      const formattedWithdrawals = (dbWithdrawals || []).map((w: any) => ({
         id: w.id,
         agent: w.users?.name || 'Unknown Agent',
         agentEmail: w.users?.email || '',
@@ -98,7 +100,10 @@ export default function AdminDashboard() {
         net: Number(w.payout_amount),
         commission: Number(w.amount_requested) - Number(w.payout_amount),
         status: w.status,
-        momo: `${w.momo_number} (${w.network})`
+        momo: `${w.momo_number} (${w.network})`,
+        momoNumber: w.momo_number,
+        network: w.network,
+        created_at: w.created_at
       }));
 
       setWithdrawals(formattedWithdrawals);
@@ -153,22 +158,48 @@ export default function AdminDashboard() {
   };
 
   const handleApproveWithdrawal = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number, commission: number) => {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('withdrawals')
-        .update({ status: 'approved' })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      await sendWithdrawalProcessedNotification(agentEmail, agentName, reqAmount, payout, commission);
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      alert("Error approving withdrawal");
+    if (!confirm(`Are you sure you want to approve this withdrawal request for ${formatCurrency(payout)}?`)) {
+      return;
     }
+
+    const processPayout = async (override: boolean = false) => {
+      try {
+        const response = await fetch('/api/admin/withdrawals/approve', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ withdrawalId: id, manualOverride: override }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to approve payout');
+        }
+
+        alert(override ? "Withdrawal marked as manually paid!" : "Payout processed successfully via Paystack!");
+        fetchData();
+      } catch (err: any) {
+        console.error(err);
+        if (!override) {
+          const forceConfirm = confirm(
+            `Automated payout via Paystack failed:\n"${err.message}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
+          );
+          if (forceConfirm) {
+            await processPayout(true);
+          }
+        } else {
+          alert(`Error approving withdrawal: ${err.message}`);
+        }
+      }
+    };
+
+    await processPayout(false);
   };
+
+  const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending');
+  const processedWithdrawals = withdrawals.filter(w => w.status !== 'pending');
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-[1200px] mx-auto pb-24 lg:pb-8">
@@ -366,62 +397,145 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Section: Withdrawal Requests */}
+        {/* Section: Withdrawals (Pending vs History) */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col">
-          {/* Section Heading: 15px, font-weight 600 */}
-          <h3 className="text-[15px] font-semibold text-[#111827] mb-4 shrink-0">
-            Withdrawal Requests
-          </h3>
+          {/* Header Row with Title and Tab Selectors */}
+          <div className="flex items-center justify-between mb-4 shrink-0 gap-2">
+            <h3 className="text-[15px] font-semibold text-[#111827]">
+              Withdrawals
+            </h3>
+            <div className="flex bg-[#F3F4F6] p-0.5 rounded-lg text-[11px] shrink-0">
+              <button 
+                onClick={() => setWithdrawalTab('pending')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  withdrawalTab === 'pending' 
+                    ? "bg-white text-[#111827] shadow-sm" 
+                    : "text-[#6B7280] hover:text-[#111827]"
+                }`}
+              >
+                Pending ({pendingWithdrawals.length})
+              </button>
+              <button 
+                onClick={() => setWithdrawalTab('history')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  withdrawalTab === 'history' 
+                    ? "bg-white text-[#111827] shadow-sm" 
+                    : "text-[#6B7280] hover:text-[#111827]"
+                }`}
+              >
+                Recent Payouts ({processedWithdrawals.length})
+              </button>
+            </div>
+          </div>
 
           {/* List Content */}
           <div className="flex-1 flex flex-col min-h-[160px]">
-            {withdrawals.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
-                <div className="w-12 h-12 rounded-full bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] mb-3 border border-[#E5E7EB]">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <p className="text-[13px] text-[#6B7280] font-normal">
-                  No pending withdrawals at the moment.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3.5">
-                {withdrawals.map((w) => (
-                  <div key={w.id} className="flex flex-col gap-3.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors">
-                    {/* Top Row: Agent Info + Commission Badge */}
-                    <div className="flex items-center justify-between gap-3 w-full">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-[#F0FDF4] text-[#15803D] flex items-center justify-center font-bold text-xs shrink-0 uppercase tracking-wide shadow-sm">
-                          {w.agent ? w.agent.charAt(0) : "K"}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-[#111827] leading-tight truncate">{w.agent}</p>
-                          <p className="text-[11px] text-[#9CA3AF] leading-none mt-0.5">Agent Partner</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] uppercase tracking-wider text-[#EF4444] font-bold bg-[#FEF2F2] border border-[#FEE2E2] px-2 py-0.5 rounded-full inline-block">
-                          Fee: -{formatCurrency(w.commission)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Bottom Row: Net Payout Amount + Action Button */}
-                    <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]/50 gap-4 w-full">
-                      <div className="min-w-0">
-                        <span className="text-[10px] uppercase tracking-wider text-[#6B7280] font-semibold block leading-none">Net Payout</span>
-                        <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleApproveWithdrawal(w.id, w.agent, w.agentEmail, w.amount, w.net, w.commission)}
-                        className="h-7.5 px-3 bg-white border border-[#D1D5DB] hover:border-[#16A34A] hover:bg-[#F0FDF4] hover:text-[#15803D] text-[#374151] rounded-lg text-[12px] font-semibold transition-colors cursor-pointer min-h-0 flex items-center justify-center shrink-0"
-                      >
-                        Process Payout
-                      </button>
-                    </div>
+            {withdrawalTab === 'pending' ? (
+              pendingWithdrawals.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] mb-3 border border-[#E5E7EB]">
+                    <Clock className="h-5 w-5" />
                   </div>
-                ))}
-              </div>
+                  <p className="text-[13px] text-[#6B7280] font-normal">
+                    No pending withdrawals at the moment.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {pendingWithdrawals.map((w) => (
+                    <div key={w.id} className="flex flex-col gap-3.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors">
+                      {/* Top Row: Agent Info + Commission Badge */}
+                      <div className="flex items-center justify-between gap-3 w-full">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-[#F0FDF4] text-[#15803D] flex items-center justify-center font-bold text-xs shrink-0 uppercase tracking-wide shadow-sm">
+                            {w.agent ? w.agent.charAt(0) : "K"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#111827] leading-tight truncate">{w.agent}</p>
+                            <p className="text-[11px] text-[#9CA3AF] leading-none mt-0.5">Agent Partner</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] uppercase tracking-wider text-[#EF4444] font-bold bg-[#FEF2F2] border border-[#FEE2E2] px-2 py-0.5 rounded-full inline-block">
+                            Fee: -{formatCurrency(w.commission)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: Net Payout Amount + Action Button */}
+                      <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]/50 gap-4 w-full">
+                        <div className="min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider text-[#6B7280] font-semibold block leading-none">Net Payout</span>
+                          <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleApproveWithdrawal(w.id, w.agent, w.agentEmail, w.amount, w.net, w.commission)}
+                          className="h-7.5 px-3 bg-white border border-[#D1D5DB] hover:border-[#16A34A] hover:bg-[#F0FDF4] hover:text-[#15803D] text-[#374151] rounded-lg text-[12px] font-semibold transition-colors cursor-pointer min-h-0 flex items-center justify-center shrink-0"
+                        >
+                          Process Payout
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              processedWithdrawals.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] mb-3 border border-[#E5E7EB]">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <p className="text-[13px] text-[#6B7280] font-normal">
+                    No processed payouts yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {processedWithdrawals.map((w) => (
+                    <div key={w.id} className="flex flex-col gap-3.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg hover:bg-slate-50 transition-colors">
+                      {/* Top Row: Agent Info + Commission Badge */}
+                      <div className="flex items-center justify-between gap-3 w-full">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-[#F3F4F6] text-[#6B7280] flex items-center justify-center font-bold text-xs shrink-0 uppercase tracking-wide shadow-sm">
+                            {w.agent ? w.agent.charAt(0) : "K"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#111827] leading-tight truncate">{w.agent}</p>
+                            <p className="text-[11px] text-[#9CA3AF] leading-none mt-0.5">
+                              {w.created_at ? new Date(w.created_at).toLocaleDateString() : 'Date Unknown'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] uppercase tracking-wider text-[#EF4444] font-bold bg-[#FEF2F2] border border-[#FEE2E2] px-2 py-0.5 rounded-full inline-block">
+                            Fee: -{formatCurrency(w.commission)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: Net Payout Amount + Status Badge */}
+                      <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]/50 gap-4 w-full">
+                        <div className="min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider text-[#6B7280] font-semibold block leading-none">Net Payout</span>
+                          <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
+                          <span className="text-[11px] text-[#9CA3AF] mt-1 block leading-none truncate">{w.momo}</span>
+                        </div>
+                        <div className="shrink-0">
+                          {w.status === 'approved' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-[#F0FDF4] text-[#15803D] text-[10px] font-semibold rounded-full uppercase tracking-wider">
+                              Approved
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-[#FEF2F2] text-[#EF4444] text-[10px] font-semibold rounded-full uppercase tracking-wider">
+                              Rejected
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         </div>
