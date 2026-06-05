@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { formatCurrency } from "@/lib/pricing";
 import { 
   Filter,
@@ -11,12 +11,15 @@ import {
   Coins,
   Users,
   Clock,
-  UserX
+  UserX,
+  RefreshCw
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { sendAgentApprovalNotification, sendWithdrawalProcessedNotification } from "@/lib/emails";
 
 export default function AdminDashboard() {
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [pendingAgents, setPendingAgents] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -26,7 +29,8 @@ export default function AdminDashboard() {
     pendingWithdrawalsCount: 0,
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
     try {
       const supabase = createClient();
 
@@ -100,12 +104,18 @@ export default function AdminDashboard() {
       setWithdrawals(formattedWithdrawals);
     } catch (err) {
       console.error("Error fetching admin stats:", err);
+    } finally {
+      setIsRefreshing(false);
+      setLastUpdated(new Date().toLocaleTimeString());
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => fetchData(true), 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleApproveAgent = async (id: string, name: string, email: string) => {
     try {
@@ -167,16 +177,22 @@ export default function AdminDashboard() {
         Title font size 20px MAXIMUM, font-weight 600, color #111827
       */}
       <div className="flex items-center justify-between h-10 w-full gap-4 shrink-0">
-        <h1 className="text-[20px] font-semibold text-[#111827] tracking-tight leading-none shrink-0">
-          Platform Performance
-        </h1>
+        <div>
+          <h1 className="text-[20px] font-semibold text-[#111827] tracking-tight leading-none shrink-0">
+            Platform Performance
+          </h1>
+          {lastUpdated && (
+            <p className="text-[11px] text-[#9CA3AF] mt-0.5">Last updated: {lastUpdated}</p>
+          )}
+        </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button className="h-9 px-3.5 bg-white border border-[#E5E7EB] rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#F9FAFB] active:scale-95 transition-all flex items-center justify-center gap-1.5 min-h-0 cursor-pointer">
-            <Filter className="h-4 w-4 text-[#6B7280]" />
-            <span>Filter</span>
-          </button>
-          <button className="h-9 px-4 bg-[#111827] text-white rounded-lg text-[13px] font-medium hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center min-h-0 cursor-pointer">
-            Export Data
+          <button 
+            onClick={() => fetchData()}
+            disabled={isRefreshing}
+            className="h-9 px-3.5 bg-white border border-[#E5E7EB] rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#F9FAFB] active:scale-95 transition-all flex items-center justify-center gap-1.5 min-h-0 cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 text-[#6B7280] ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>

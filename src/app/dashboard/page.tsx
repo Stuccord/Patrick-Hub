@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { formatCurrency } from "@/lib/pricing";
 import { 
   Wallet, 
@@ -9,7 +9,8 @@ import {
   Share2, 
   Copy,
   ArrowDownToLine,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
@@ -27,6 +28,8 @@ export default function AgentDashboard() {
     monthlyProfit: 0.00
   });
   const [host, setHost] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState("");
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -34,7 +37,8 @@ export default function AgentDashboard() {
     }
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -89,14 +93,19 @@ export default function AgentDashboard() {
       });
     } catch (err) {
       console.error("Error loading agent dashboard stats:", err);
+    } finally {
+      setIsRefreshing(false);
+      setLastUpdated(new Date().toLocaleTimeString());
     }
-  };
+  }, [host]);
 
   useEffect(() => {
     if (host) {
       fetchData();
+      const interval = setInterval(() => fetchData(true), 30000);
+      return () => clearInterval(interval);
     }
-  }, [host]);
+  }, [host, fetchData]);
 
   const handleCopyLink = () => {
     if (!agent.store_url) return;
@@ -117,9 +126,20 @@ export default function AgentDashboard() {
         <div>
           <h1 className="text-xl sm:text-2xl font-black">Welcome back, {agent.name}!</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Here is a quick overview of your reseller business performance.</p>
+          {lastUpdated && <p className="text-slate-500 text-[10px] mt-1">Last updated: {lastUpdated}</p>}
         </div>
-        <div className="bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 font-bold text-xs text-slate-300">
-          Agent Status: <span className={`font-extrabold capitalize ${agent.status === 'active' ? 'text-green-500' : 'text-amber-500'}`}>{agent.status || 'Pending'}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchData()}
+            disabled={isRefreshing}
+            className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <div className="bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 font-bold text-xs text-slate-300">
+            Agent Status: <span className={`font-extrabold capitalize ${agent.status === 'active' ? 'text-green-500' : 'text-amber-500'}`}>{agent.status || 'Pending'}</span>
+          </div>
         </div>
       </div>
 
