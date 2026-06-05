@@ -12,7 +12,11 @@ import {
   Users,
   Clock,
   UserX,
-  RefreshCw
+  RefreshCw,
+  ShoppingCart,
+  Hourglass,
+  ArrowUpCircle,
+  CalendarDays
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { sendAgentApprovalNotification, sendWithdrawalProcessedNotification } from "@/lib/emails";
@@ -28,6 +32,10 @@ export default function AdminDashboard() {
     platformEarnings: 0.00,
     activeAgentsCount: 0,
     pendingWithdrawalsCount: 0,
+    totalOrdersCount: 0,
+    pendingOrdersCount: 0,
+    totalPayoutsSent: 0.00,
+    monthlySales: 0.00,
   });
 
   const fetchData = useCallback(async (silent = false) => {
@@ -69,11 +77,42 @@ export default function AdminDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
 
+      // 5. Fetch total orders count
+      const { count: totalOrdersCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true });
+
+      // 6. Fetch pending orders count
+      const { count: pendingOrdersCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      // 7. Fetch total payouts sent (approved withdrawals payout_amount)
+      const { data: paidWithdrawals } = await supabase
+        .from('withdrawals')
+        .select('payout_amount')
+        .eq('status', 'approved');
+      const totalPayoutsSent = paidWithdrawals?.reduce((acc, w) => acc + Number(w.payout_amount), 0) || 0;
+
+      // 8. Fetch this month's sales
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const { data: monthOrders } = await supabase
+        .from('orders')
+        .select('customer_paid')
+        .eq('status', 'completed')
+        .gte('created_at', startOfMonth);
+      const monthlySales = monthOrders?.reduce((acc, o) => acc + Number(o.customer_paid), 0) || 0;
+
       setStats({
         totalSales,
         platformEarnings,
         activeAgentsCount: activeAgentsCount || 0,
-        pendingWithdrawalsCount: pendingWithdrawalsCount || 0
+        pendingWithdrawalsCount: pendingWithdrawalsCount || 0,
+        totalOrdersCount: totalOrdersCount || 0,
+        pendingOrdersCount: pendingOrdersCount || 0,
+        totalPayoutsSent,
+        monthlySales,
       });
 
       // 5. Fetch pending agents list
@@ -228,10 +267,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 
-        PROBLEM 2 — STAT CARDS (4 cards in a row, desktop, repeat(4, 1fr) CSS Grid) 
-        Each card: min-width: 0, overflow-hidden, no overflow outside card
-      */}
+      {/* Row 1 — Core financial stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Sales */}
         <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
@@ -336,10 +372,116 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 
-        PROBLEM 5 — BOTTOM SECTIONS LAYOUT (Two-column grid on desktop, 50/50 split) 
-        Each section heading: 15px, font-weight 600. White cards with border-radius: 12px, border: 1px solid #E5E7EB, padding: 20px
-      */}
+      {/* Row 2 — Operational stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 5: Total Orders */}
+        <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between w-full shrink-0">
+            <div className="w-9 h-9 bg-[#EFF6FF] rounded-full flex items-center justify-center text-[#3B82F6] shrink-0">
+              <ShoppingCart className="h-4 w-4" />
+            </div>
+            <button className="text-[#9CA3AF] hover:text-[#6B7280] min-h-0 p-1 rounded-md transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 min-w-0 flex-1 flex flex-col justify-end">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight leading-none truncate shrink-0">
+              {stats.totalOrdersCount}
+            </h3>
+            <div className="flex items-center justify-between mt-2.5 min-w-0 shrink-0 gap-1.5">
+              <span className="text-[10px] uppercase tracking-[0.05em] text-[#6B7280] font-semibold truncate whitespace-nowrap block flex-1">
+                Total Orders
+              </span>
+              <span className="text-[11px] text-[#9CA3AF] font-normal leading-none normal-case truncate whitespace-nowrap shrink-0">
+                all time
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 6: Pending Orders */}
+        <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between w-full shrink-0">
+            <div className="w-9 h-9 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 shrink-0">
+              <Hourglass className="h-4 w-4" />
+            </div>
+            <button className="text-[#9CA3AF] hover:text-[#6B7280] min-h-0 p-1 rounded-md transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 min-w-0 flex-1 flex flex-col justify-end">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight leading-none truncate shrink-0">
+              {stats.pendingOrdersCount}
+            </h3>
+            <div className="flex items-center justify-between mt-2.5 min-w-0 shrink-0 gap-1.5">
+              <span className="text-[10px] uppercase tracking-[0.05em] text-[#6B7280] font-semibold truncate whitespace-nowrap block flex-1">
+                Pending Orders
+              </span>
+              {stats.pendingOrdersCount > 0 ? (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-semibold rounded-full shrink-0 uppercase">
+                  Action needed
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#F0FDF4] text-[#15803D] text-[10px] font-semibold rounded-full shrink-0">
+                  All clear
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 7: Total Payouts Sent */}
+        <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between w-full shrink-0">
+            <div className="w-9 h-9 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 shrink-0">
+              <ArrowUpCircle className="h-4 w-4" />
+            </div>
+            <button className="text-[#9CA3AF] hover:text-[#6B7280] min-h-0 p-1 rounded-md transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 min-w-0 flex-1 flex flex-col justify-end">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight leading-none truncate shrink-0">
+              {formatCurrency(stats.totalPayoutsSent)}
+            </h3>
+            <div className="flex items-center justify-between mt-2.5 min-w-0 shrink-0 gap-1.5">
+              <span className="text-[10px] uppercase tracking-[0.05em] text-[#6B7280] font-semibold truncate whitespace-nowrap block flex-1">
+                Payouts Sent
+              </span>
+              <span className="text-[11px] text-[#9CA3AF] font-normal leading-none normal-case truncate whitespace-nowrap shrink-0">
+                to agents
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 8: This Month's Sales */}
+        <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between w-full shrink-0">
+            <div className="w-9 h-9 bg-[#F0FDF4] rounded-full flex items-center justify-center text-[#16A34A] shrink-0">
+              <CalendarDays className="h-4 w-4" />
+            </div>
+            <button className="text-[#9CA3AF] hover:text-[#6B7280] min-h-0 p-1 rounded-md transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 min-w-0 flex-1 flex flex-col justify-end">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight leading-none truncate shrink-0">
+              {formatCurrency(stats.monthlySales)}
+            </h3>
+            <div className="flex items-center justify-between mt-2.5 min-w-0 shrink-0 gap-1.5">
+              <span className="text-[10px] uppercase tracking-[0.05em] text-[#6B7280] font-semibold truncate whitespace-nowrap block flex-1">
+                This Month
+              </span>
+              <span className="text-[11px] text-[#9CA3AF] font-normal leading-none normal-case truncate whitespace-nowrap shrink-0">
+                {new Date().toLocaleString('default', { month: 'short' })}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Section: Pending Agent Approvals */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col">
