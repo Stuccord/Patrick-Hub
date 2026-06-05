@@ -90,7 +90,7 @@ export default function StoreClient({ slug }: { slug: string }) {
     const amountInPesewas = Math.round((selectedBundle.agent_price + platformFee) * 100);
 
     try {
-      const PaystackPop = (await import('@paystack/inline-js')).default;
+      const PaystackPop = (await import('@paystack/inline-js')).default as any;
       const paystack = new PaystackPop();
       paystack.newTransaction({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
