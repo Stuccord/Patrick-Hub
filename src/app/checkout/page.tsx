@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/pricing";
 import { 
@@ -9,10 +9,19 @@ import {
   ArrowLeft, 
   Smartphone, 
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Zap
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
+
+interface PaystackTransaction {
+  reference: string;
+}
+
+interface PaystackPopInstance {
+  newTransaction: (opts: Record<string, unknown>) => void;
+}
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -22,33 +31,27 @@ function CheckoutContent() {
   const [reference, setReference] = useState("");
   const [agentId, setAgentId] = useState("");
   const [bundleId, setBundleId] = useState("");
-  const [phone, setPhone] = useState(searchParams.get("phone") || "0240000000");
+  const [platformFee, setPlatformFee] = useState(0.20);
+  const [phone, setPhone] = useState(searchParams.get("phone") || "");
   const [network, setNetwork] = useState('');
 
-  // Get data from URL (in production this would be validated from DB/State)
-  const bundleName = searchParams.get("bundle") || "MTN 1GB";
+  // Stable fallback reference generated once (not on every render)
+  const fallbackRef = useRef(`TXN-${Date.now().toString(36).toUpperCase()}`);
+
+  // Get data from URL
+  const bundleName = searchParams.get("bundle") || "Data Bundle";
   const agentPrice = parseFloat(searchParams.get("price") || "5.00");
-  const platformFee = 0.20;
   const totalPrice = agentPrice + platformFee;
+
   const detectNetwork = (phoneNumber: string): string => {
     const cleaned = phoneNumber.replace(/\D/g, '');
     const prefix = cleaned.slice(0, 3);
     switch (prefix) {
-      case '024':
-      case '054':
-      case '055':
-        return 'MTN';
-      case '026':
-      case '056':
-        return 'Telecel';
-      case '020':
-      case '050':
-        return 'Airtel';
-      case '027':
-      case '057':
-        return 'Vodafone';
-      default:
-        return '';
+      case '024': case '054': case '055': return 'MTN';
+      case '026': case '056': return 'Telecel';
+      case '020': case '050': return 'Airtel';
+      case '027': case '057': return 'Vodafone';
+      default: return '';
     }
   };
 
@@ -57,7 +60,15 @@ function CheckoutContent() {
       try {
         const supabase = createClient();
         
-        // 1. Get agent
+        // Fetch platform fee from DB
+        const { data: feeConfig } = await supabase
+          .from('platform_config')
+          .select('value')
+          .eq('key', 'transaction_fee')
+          .maybeSingle();
+        if (feeConfig) setPlatformFee(Number(feeConfig.value) || 0.20);
+
+        // Get agent ID
         let resolvedAgentId = searchParams.get("agent_id") || "";
         if (!resolvedAgentId) {
           const { data: firstAgent } = await supabase
@@ -66,23 +77,11 @@ function CheckoutContent() {
             .eq('status', 'active')
             .limit(1)
             .maybeSingle();
-            
-          if (firstAgent) {
-            resolvedAgentId = firstAgent.id;
-          } else {
-            const { data: adminUser } = await supabase
-              .from('users')
-              .select('id')
-              .eq('username', 'admin')
-              .maybeSingle();
-            if (adminUser) {
-              resolvedAgentId = adminUser.id;
-            }
-          }
+          if (firstAgent) resolvedAgentId = firstAgent.id;
         }
         setAgentId(resolvedAgentId);
 
-        // 2. Get bundle
+        // Get bundle ID
         let resolvedBundleId = searchParams.get("bundle_id") || "";
         if (!resolvedBundleId) {
           const { data: bundleData } = await supabase
@@ -90,7 +89,6 @@ function CheckoutContent() {
             .select('id')
             .eq('name', bundleName)
             .maybeSingle();
-
           if (bundleData) {
             resolvedBundleId = bundleData.id;
           } else {
@@ -100,9 +98,7 @@ function CheckoutContent() {
               .eq('is_active', true)
               .limit(1)
               .maybeSingle();
-            if (anyBundle) {
-              resolvedBundleId = anyBundle.id;
-            }
+            if (anyBundle) resolvedBundleId = anyBundle.id;
           }
         }
         setBundleId(resolvedBundleId);
@@ -111,7 +107,8 @@ function CheckoutContent() {
       }
     }
     loadPaymentDetails();
-  }, [bundleName, searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundleName]);
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -119,8 +116,9 @@ function CheckoutContent() {
     const amountInPesewas = Math.round(totalPrice * 100);
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const PaystackPop = (await import('@paystack/inline-js')).default as any;
-      const paystack = new PaystackPop();
+      const paystack = new PaystackPop() as PaystackPopInstance;
       paystack.newTransaction({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
         email: dummyEmail,
@@ -128,11 +126,7 @@ function CheckoutContent() {
         currency: "GHS",
         metadata: {
           custom_fields: [
-            {
-              display_name: "Customer Phone",
-              variable_name: "customer_phone",
-              value: phone
-            }
+            { display_name: "Customer Phone", variable_name: "customer_phone", value: phone }
           ],
           agent_id: agentId,
           bundle_id: bundleId,
@@ -140,7 +134,7 @@ function CheckoutContent() {
           customer_paid: totalPrice.toString(),
           platform_fee: platformFee.toString()
         },
-        onSuccess: (transaction: any) => {
+        onSuccess: (transaction: PaystackTransaction) => {
           setReference(transaction.reference);
           setIsProcessing(false);
           setIsSuccess(true);
@@ -156,6 +150,16 @@ function CheckoutContent() {
     }
   };
 
+  // Network colour helpers
+  const netColors: Record<string, { bg: string; text: string; icon: string }> = {
+    MTN:        { bg: "bg-amber-100",   text: "text-amber-800",  icon: "🟡" },
+    Telecel:    { bg: "bg-rose-100",    text: "text-rose-800",   icon: "🔴" },
+    Vodafone:   { bg: "bg-rose-100",    text: "text-rose-800",   icon: "🔴" },
+    AirtelTigo: { bg: "bg-blue-100",    text: "text-blue-800",   icon: "🔵" },
+    Airtel:     { bg: "bg-blue-100",    text: "text-blue-800",   icon: "🔵" },
+  };
+  const netStyle = netColors[network] || { bg: "bg-slate-100", text: "text-slate-700", icon: "📶" };
+
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -164,12 +168,25 @@ function CheckoutContent() {
             <CheckCircle2 className="h-12 w-12" />
           </div>
           <h1 className="text-3xl font-black text-slate-900">Payment Success!</h1>
-          <p className="text-slate-500 leading-relaxed">
-            Your payment of <span className="font-bold text-slate-900">{formatCurrency(totalPrice)}</span> was successful. 
-            The data bundle <span className="font-bold text-slate-900">{bundleName}</span> is being delivered to <span className="font-bold text-slate-900">{phone}</span>.
-          </p>
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs text-slate-400 font-mono">
-            REF: {reference || `DH-${Math.random().toString(36).substring(7).toUpperCase()}`}
+
+          {/* Bundle delivered to */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm space-y-2 text-left">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Bundle</span>
+              <span className="font-bold text-slate-900">{bundleName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Delivered to</span>
+              <span className="font-bold text-slate-900">{phone}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Amount paid</span>
+              <span className="font-bold text-slate-900">{formatCurrency(totalPrice)}</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs text-slate-400 font-mono text-center">
+            REF: {reference || fallbackRef.current}
           </div>
           <Link 
             href="/" 
@@ -193,100 +210,107 @@ function CheckoutContent() {
         </button>
 
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-slate-200/50 border border-slate-100">
+
+          {/* Dark header — shows what's being bought */}
           <div className="bg-slate-900 p-8 text-white">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-brand-primary rounded flex items-center justify-center text-[10px] font-black">D</div>
                 <span className="text-sm font-bold opacity-80">Secure Checkout</span>
               </div>
               <ShieldCheck className="h-5 w-5 text-brand-primary" />
             </div>
+
+            {/* Bundle being purchased */}
+            <div className="bg-white/10 rounded-2xl p-4 mb-5 flex items-center gap-3">
+              <div className="w-10 h-10 bg-brand-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                <Zap className="h-5 w-5 text-brand-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">You&apos;re buying</p>
+                <p className="font-black text-white text-base leading-tight truncate">{bundleName}</p>
+              </div>
+            </div>
+
             <div className="space-y-1">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Amount to Pay</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total to Pay</p>
               <h2 className="text-4xl font-black">{formatCurrency(totalPrice)}</h2>
             </div>
           </div>
 
           <div className="p-8 space-y-8">
-            <div className="space-y-4">
+            {/* Order breakdown */}
+            <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 font-medium">Bundle</span>
-                <span className="text-slate-900 font-bold">{bundleName}</span>
+                <span className="text-slate-500 font-medium">Bundle price</span>
+                <span className="text-slate-900 font-bold">{formatCurrency(agentPrice)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm gap-4">
-                <span className="text-slate-500 font-medium shrink-0">Phone Number</span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500 font-medium">Platform fee</span>
+                <span className="text-slate-900 font-bold">{formatCurrency(platformFee)}</span>
+              </div>
+              <div className="h-px bg-slate-100" />
+
+              {/* Phone input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recipient Phone Number</label>
                 <input 
                   type="tel"
                   value={phone}
                   onChange={(e) => {
-                    const newPhone = e.target.value;
-                    setPhone(newPhone);
-                    setNetwork(detectNetwork(newPhone));
+                    const val = e.target.value;
+                    setPhone(val);
+                    setNetwork(detectNetwork(val));
                   }}
-                  placeholder="e.g. 0240000000"
-                  className="text-right font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-brand-primary focus:bg-white focus:outline-none transition-colors w-full max-w-[180px] text-sm"
+                  placeholder="e.g. 0241234567"
+                  className="w-full px-4 h-12 border-2 border-slate-200 rounded-xl font-bold text-slate-900 text-sm outline-none focus:border-brand-primary transition-colors"
                 />
                 {network && (
-                  <p className="text-sm text-slate-500 mt-1">Network: {network}</p>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${netStyle.bg} ${netStyle.text}`}>
+                    {netStyle.icon} Detected: {network}
+                  </span>
                 )}
-              </div>
-              <div className="h-px bg-slate-100"></div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 font-medium">Subtotal</span>
-                <span className="text-slate-900 font-bold">{formatCurrency(agentPrice)}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 font-medium">Platform Fee</span>
-                <span className="text-slate-900 font-bold">{formatCurrency(platformFee)}</span>
               </div>
             </div>
 
-            <div className="space-y-4">
+            {/* Payment method */}
+            <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Payment Method</h3>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center gap-4 p-4 rounded-2xl border-2 border-brand-primary bg-brand-light/20 relative overflow-hidden">
-                  <Smartphone className="h-6 w-6 text-brand-primary" />
-                  <div>
-                    <p className="font-bold text-slate-900">Mobile Money</p>
-                    <p className="text-xs text-slate-500 italic">MTN, Telecel, AT</p>
-                  </div>
-                  <div className="ml-auto w-5 h-5 rounded-full bg-brand-primary flex items-center justify-center">
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                  </div>
+              <div className="flex items-center gap-4 p-4 rounded-2xl border-2 border-brand-primary bg-brand-light/20 relative overflow-hidden">
+                <Smartphone className="h-6 w-6 text-brand-primary" />
+                <div>
+                  <p className="font-bold text-slate-900">Mobile Money</p>
+                  <p className="text-xs text-slate-500 italic">MTN, Telecel, AT — powered by Paystack</p>
+                </div>
+                <div className="ml-auto w-5 h-5 rounded-full bg-brand-primary flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white rounded-full"></div>
                 </div>
               </div>
             </div>
 
             <button 
               onClick={handlePayment}
-              disabled={isProcessing || phone.length < 10}
-              className="w-full bg-brand-primary text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 shadow-xl shadow-brand-primary/30 hover:bg-brand-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed btn-animate"
+              disabled={isProcessing || phone.replace(/\D/g,'').length < 10}
+              className="w-full bg-brand-primary text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 shadow-xl shadow-brand-primary/30 hover:bg-brand-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed btn-animate cursor-pointer"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  Processing...
+                  Opening Payment...
                 </>
               ) : (
                 <>
                   <CreditCard className="h-6 w-6" />
-                  Pay Now
+                  Pay {formatCurrency(totalPrice)}
                 </>
               )}
             </button>
           </div>
         </div>
 
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-4 grayscale opacity-40">
-            <div className="h-8 w-12 bg-slate-200 rounded"></div>
-            <div className="h-8 w-12 bg-slate-200 rounded"></div>
-            <div className="h-8 w-12 bg-slate-200 rounded"></div>
-          </div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-            Secured by Paystack
-          </p>
-        </div>
+        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest text-center">
+          Secured by Paystack
+        </p>
       </div>
     </div>
   );
