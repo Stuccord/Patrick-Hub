@@ -298,9 +298,39 @@ export default function StoreClient({ slug }: { slug: string }) {
               <ArrowLeft className="w-4.5 h-4.5" /> Back to bundles
             </button>
 
+            {/* Selected bundle reminder */}
+            {(() => {
+              const styles = getNetworkStyles(selectedBundle.network);
+              return (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${styles.cardBg} ${styles.cardBorder}`}>
+                  <div className="shrink-0">
+                    {selectedBundle.network === 'MTN' && <MtnLogo />}
+                    {(selectedBundle.network === 'Vodafone' || selectedBundle.network === 'Telecel') && <TelecelLogo />}
+                    {(selectedBundle.network === 'AirtelTigo' || selectedBundle.network === 'AT') && <AirtelTigoLogo />}
+                    {!['MTN','Vodafone','Telecel','AirtelTigo','AT'].includes(selectedBundle.network) && (
+                      <div className={`w-12 h-12 rounded-xl ${styles.iconBg} flex items-center justify-center`}>
+                        <Zap className="h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">You&apos;re buying</p>
+                    <p className="font-black text-slate-900 text-sm leading-tight truncate">{selectedBundle.name}</p>
+                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(selectedBundle.agent_price)} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
+                  </div>
+                  <button
+                    onClick={() => setStep(1)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
+              );
+            })()}
+
             <div className="space-y-1.5 text-center sm:text-left">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Recipient Info</h2>
-              <p className="text-slate-500 text-sm leading-relaxed">Enter target phone number and provider.</p>
+              <p className="text-slate-500 text-sm leading-relaxed">Enter the phone number that will receive the data.</p>
             </div>
 
             <form onSubmit={handleDetailsSubmit} className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-6">
@@ -368,6 +398,30 @@ export default function StoreClient({ slug }: { slug: string }) {
             <button onClick={() => setStep(2)} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 text-sm font-bold min-h-[48px]">
               <ArrowLeft className="w-4.5 h-4.5" /> Back to details
             </button>
+
+            {/* Selected bundle reminder */}
+            {(() => {
+              const styles = getNetworkStyles(selectedBundle.network);
+              return (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${styles.cardBg} ${styles.cardBorder}`}>
+                  <div className="shrink-0">
+                    {selectedBundle.network === 'MTN' && <MtnLogo />}
+                    {(selectedBundle.network === 'Vodafone' || selectedBundle.network === 'Telecel') && <TelecelLogo />}
+                    {(selectedBundle.network === 'AirtelTigo' || selectedBundle.network === 'AT') && <AirtelTigoLogo />}
+                    {!['MTN','Vodafone','Telecel','AirtelTigo','AT'].includes(selectedBundle.network) && (
+                      <div className={`w-12 h-12 rounded-xl ${styles.iconBg} flex items-center justify-center`}>
+                        <Zap className="h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">You&apos;re buying</p>
+                    <p className="font-black text-slate-900 text-sm leading-tight truncate">{selectedBundle.name}</p>
+                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(selectedBundle.agent_price)} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-1.5 text-center sm:text-left">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Verify Order</h2>
