@@ -20,6 +20,31 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
+const MtnLogo = ({ size = "w-9 h-9" }: { size?: string }) => (
+  <svg viewBox="0 0 100 100" className={`${size} shrink-0 rounded-lg overflow-hidden shadow-sm border border-amber-200/50`}>
+    <rect width="100" height="100" fill="#FFCC00" />
+    <ellipse cx="50" cy="50" rx="36" ry="22" fill="none" stroke="#002F6C" strokeWidth="4" />
+    <text x="50" y="57" fontSize="18" fontWeight="900" fontFamily="'Impact', 'Arial Black', sans-serif" textAnchor="middle" fill="#002F6C" letterSpacing="1">MTN</text>
+  </svg>
+);
+
+const TelecelLogo = ({ size = "w-9 h-9" }: { size?: string }) => (
+  <svg viewBox="0 0 100 100" className={`${size} shrink-0 rounded-lg overflow-hidden shadow-sm border border-rose-200/50`}>
+    <rect width="100" height="100" fill="#E60000" />
+    <text x="50" y="66" fontSize="56" fontWeight="bold" fontFamily="'Trebuchet MS', sans-serif" textAnchor="middle" fill="#FFFFFF">t</text>
+  </svg>
+);
+
+const AirtelTigoLogo = ({ size = "w-9 h-9" }: { size?: string }) => (
+  <svg viewBox="0 0 100 100" className={`${size} shrink-0 rounded-lg overflow-hidden shadow-sm border border-blue-200/50`}>
+    <rect width="100" height="100" fill="#0056B3" />
+    <circle cx="38" cy="50" r="24" fill="#E11D48" />
+    <circle cx="62" cy="50" r="24" fill="#2563EB" />
+    <path d="M 50 26 A 24 24 0 0 0 50 74 A 24 24 0 0 0 50 26 Z" fill="#7C3AED" />
+    <text x="50" y="57" fontSize="16" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" fill="#FFFFFF">AT</text>
+  </svg>
+);
+
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -31,7 +56,59 @@ export default function LandingPage() {
   
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  // old Pexels video states and hooks removed to resolve CORS issues
+  // Hero Buy Data Form State
+  const [bundles, setBundles] = useState<any[]>([]);
+  const [selectedNetwork, setSelectedNetwork] = useState("MTN");
+  const [selectedBundleId, setSelectedBundleId] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    async function loadBundles() {
+      try {
+        const { createClient } = await import("@/lib/supabase");
+        const supabase = createClient();
+        const { data } = await supabase
+          .from('bundles')
+          .select('*')
+          .eq('is_active', true)
+          .order('network', { ascending: true })
+          .order('size_gb', { ascending: true });
+        if (data) {
+          setBundles(data);
+          const mtnBundles = data.filter((b: any) => b.network === "MTN");
+          if (mtnBundles.length > 0) {
+            setSelectedBundleId(mtnBundles[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading homepage bundles:", err);
+      }
+    }
+    loadBundles();
+  }, []);
+
+  const handleNetworkChange = (net: string) => {
+    setSelectedNetwork(net);
+    const filtered = bundles.filter((b: any) => b.network === net);
+    if (filtered.length > 0) {
+      setSelectedBundleId(filtered[0].id);
+    } else {
+      setSelectedBundleId("");
+    }
+  };
+
+  const handleBuyNow = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBundleId || recipientPhone.length < 10) return;
+    
+    const selectedBundle = bundles.find((b: any) => b.id === selectedBundleId);
+    if (!selectedBundle) return;
+
+    setIsRedirecting(true);
+    const checkoutUrl = `/checkout?bundle_id=${selectedBundle.id}&phone=${recipientPhone}&bundle=${encodeURIComponent(selectedBundle.name)}&price=${selectedBundle.min_resell_price}`;
+    window.location.href = checkoutUrl;
+  };
 
   useEffect(() => {
     // Check if user is logged in
@@ -408,9 +485,9 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Right Column: Premium Mockup Dashboard Card */}
+            {/* Right Column: Buy Data Now Widget + Live Toast */}
             <div className="lg:col-span-5 relative w-full max-w-md mx-auto lg:max-w-none">
-              
+
               {/* Daily Sales Hover Card */}
               <div className="absolute -top-4 -right-4 bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.06)] px-5 py-3 rounded-2xl flex items-center gap-3 z-20 shrink-0 animate-bounce duration-[3000ms] transition-transform">
                 <div className="w-8 h-8 rounded-full bg-[#F0FDF4] flex items-center justify-center text-[#16A34A]">
@@ -422,7 +499,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Automated Sales Live Toast Notification (Flashes when a sale is simulated) */}
+              {/* Automated Sales Live Toast Notification */}
               {recentSale && (
                 <div className="absolute bottom-4 -left-6 bg-[#0F172A] text-white shadow-2xl px-4 py-3 rounded-xl flex items-center gap-3 z-30 shrink-0 max-w-[280px] animate-in fade-in slide-in-from-bottom-5 duration-300">
                   <div className="w-8 h-8 rounded-full bg-[#16A34A] flex items-center justify-center text-white shrink-0">
@@ -435,111 +512,133 @@ export default function LandingPage() {
                 </div>
               )}
 
-              {/* Main Store Mockup Frame */}
-              <div className="bg-white border border-slate-100 rounded-[28px] shadow-[0_24px_70px_rgba(15,23,42,0.08)] p-6 relative overflow-hidden transition-all duration-300 hover:shadow-[0_30px_80px_rgba(22,163,74,0.12)] group">
-                
-                {/* Visual Browser Header */}
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-red-400"></span>
-                    <span className="w-3 h-3 rounded-full bg-amber-400"></span>
-                    <span className="w-3 h-3 rounded-full bg-emerald-400"></span>
-                    <span className="text-[11px] text-slate-400 font-semibold ml-2 tracking-tight">mystore.patricks-info-tech.com</span>
+              {/* Buy Data Now Card */}
+              <div className="bg-white border border-slate-100 rounded-[28px] shadow-[0_24px_70px_rgba(15,23,42,0.10)] p-6 relative overflow-hidden">
+
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-[#16A34A]" />
+                      Buy Data Now
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-bold mt-0.5">Instant delivery · All networks</p>
                   </div>
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F0FDF4] text-[#16A34A] text-[10px] font-extrabold border border-[#DCFCE7]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-ping"></span>
-                    Store Status: Active
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F0FDF4] text-[#16A34A] text-[10px] font-extrabold border border-[#DCFCE7]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-ping inline-block"></span>
+                    Live
                   </span>
                 </div>
 
-                {/* Dashboard Meta */}
-                <div className="space-y-1 mb-5">
-                  <h3 className="text-base font-black text-slate-800 tracking-tight">My Store Dashboard</h3>
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Live Metrics Overview</p>
+                {/* Network Tabs */}
+                <div className="grid grid-cols-3 gap-2 mb-5">
+                  {[
+                    { id: "MTN",        label: "MTN",        activeBg: "bg-amber-400", activeBorder: "border-amber-500", activeText: "text-amber-900",  inactiveBg: "bg-amber-50",  inactiveBorder: "border-amber-200",  inactiveText: "text-amber-700" },
+                    { id: "Telecel",    label: "Telecel",    activeBg: "bg-rose-500",  activeBorder: "border-rose-600",  activeText: "text-white",       inactiveBg: "bg-rose-50",   inactiveBorder: "border-rose-200",   inactiveText: "text-rose-700" },
+                    { id: "AirtelTigo", label: "AirtelTigo", activeBg: "bg-blue-600",  activeBorder: "border-blue-700",  activeText: "text-white",       inactiveBg: "bg-blue-50",   inactiveBorder: "border-blue-200",   inactiveText: "text-blue-700" },
+                  ].map((net) => {
+                    const isActive = selectedNetwork === net.id;
+                    return (
+                      <button
+                        key={net.id}
+                        type="button"
+                        onClick={() => handleNetworkChange(net.id)}
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-2 font-bold text-[11px] transition-all duration-200 cursor-pointer ${
+                          isActive
+                            ? `${net.activeBg} ${net.activeBorder} ${net.activeText} shadow-md scale-[1.03]`
+                            : `${net.inactiveBg} ${net.inactiveBorder} ${net.inactiveText} hover:scale-[1.01]`
+                        }`}
+                      >
+                        {net.id === "MTN"        && <MtnLogo size="w-8 h-8" />}
+                        {net.id === "Telecel"    && <TelecelLogo size="w-8 h-8" />}
+                        {net.id === "AirtelTigo" && <AirtelTigoLogo size="w-8 h-8" />}
+                        {net.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Store Branding Pill Row */}
-                <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-100 p-3 rounded-2xl mb-5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 text-white flex items-center justify-center font-extrabold text-sm shrink-0 shadow-sm">
-                      KT
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-800 leading-tight truncate">Kofi Tech Solutions</p>
-                      <p className="text-[10px] text-slate-400 font-bold">Authorized Agent</p>
+                <form onSubmit={handleBuyNow} className="space-y-3">
+                  {/* Bundle Select */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Select Bundle</label>
+                    <select
+                      value={selectedBundleId}
+                      onChange={(e) => setSelectedBundleId(e.target.value)}
+                      className="w-full h-12 px-4 border-2 border-slate-200 rounded-xl font-bold text-slate-800 text-sm bg-white outline-none focus:border-[#16A34A] transition-colors"
+                    >
+                      {bundles.filter((b: any) => b.network === selectedNetwork).length === 0 && (
+                        <option value="">No bundles available</option>
+                      )}
+                      {bundles
+                        .filter((b: any) => b.network === selectedNetwork)
+                        .map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} — GH₵ {Number(b.min_resell_price).toFixed(2)}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Phone Input */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Recipient Phone</label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="tel"
+                        required
+                        value={recipientPhone}
+                        onChange={(e) => setRecipientPhone(e.target.value)}
+                        placeholder="024 123 4567"
+                        className="w-full h-12 pl-10 pr-4 border-2 border-slate-200 rounded-xl font-bold text-slate-800 text-sm outline-none focus:border-[#16A34A] transition-colors"
+                      />
                     </div>
                   </div>
-                  <span className="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-[#F0FDF4] text-[#15803D] text-[10px] font-extrabold border border-[#DCFCE7] shrink-0">
-                    Verified Agent ✓
-                  </span>
+
+                  {/* Selected bundle price preview */}
+                  {selectedBundleId && (() => {
+                    const sel = bundles.find((b: any) => b.id === selectedBundleId);
+                    if (!sel) return null;
+                    const networkColor =
+                      selectedNetwork === "MTN" ? "text-amber-700 bg-amber-50 border-amber-200" :
+                      selectedNetwork === "Telecel" ? "text-rose-700 bg-rose-50 border-rose-200" :
+                      "text-blue-700 bg-blue-50 border-blue-200";
+                    return (
+                      <div className={`flex justify-between items-center px-4 py-2.5 rounded-xl border font-bold text-sm ${networkColor}`}>
+                        <span className="text-slate-600 font-medium">{sel.name}</span>
+                        <span className="font-black text-base">GH₵ {Number(sel.min_resell_price).toFixed(2)}</span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Buy Button */}
+                  <button
+                    type="submit"
+                    disabled={isRedirecting || !selectedBundleId || recipientPhone.length < 10}
+                    className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50 cursor-pointer ${
+                      selectedNetwork === "MTN"        ? "bg-amber-500 hover:bg-amber-600 text-slate-900 shadow-amber-300/40" :
+                      selectedNetwork === "Telecel"    ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-300/40" :
+                                                         "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-300/40"
+                    }`}
+                  >
+                    {isRedirecting ? "Redirecting..." : (
+                      <>
+                        <Globe className="w-4 h-4" />
+                        Buy Now — Instant Delivery
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Trust Strip */}
+                <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-slate-400 font-bold">
+                  <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#16A34A]" /> Secure Checkout</span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-amber-500" /> Instant Delivery</span>
+                  <span>·</span>
+                  <span>🇬🇭 Ghana</span>
                 </div>
-
-                {/* Live Sales Stat Bar */}
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl">
-                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Sales Today</span>
-                    <span className="text-lg font-black text-slate-800">{salesCount} Orders</span>
-                  </div>
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl">
-                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Store Rating</span>
-                    <span className="text-lg font-black text-[#16A34A]">4.9 / 5.0 ★</span>
-                  </div>
-                </div>
-
-                {/* Customer Facing Bundle Products List */}
-                <div className="space-y-3 mb-5">
-                  <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Active Inventory Packages</p>
-                  
-                  {/* Item 1 */}
-                  <div className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-2xl hover:border-[#16A34A] hover:bg-slate-50/50 transition-all duration-200 group/item cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-extrabold text-[10px] shrink-0">
-                        MTN
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-extrabold text-slate-800 text-xs sm:text-[13px] leading-tight">1GB MTN Data</p>
-                        <p className="text-[10px] text-slate-400 font-bold leading-none mt-0.5">Wholesale cost: GH₵ 4.20</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <div className="text-right">
-                        <p className="font-black text-[#16A34A] text-xs sm:text-[13px] leading-tight">GH₵ 5.50</p>
-                        <p className="text-[9px] text-[#15803D] font-extrabold">Profit: +GH₵ 1.30</p>
-                      </div>
-                      <Link href="/checkout?bundle=1GB%20MTN%20Data&price=5.50" className="h-6 px-2 bg-[#16A34A] text-white rounded-md text-[9px] font-bold transition-colors min-h-0 flex items-center justify-center shadow-sm">Buy</Link>
-                    </div>
-                  </div>
-
-                  {/* Item 2 */}
-                  <div className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-2xl hover:border-[#16A34A] hover:bg-slate-50/50 transition-all duration-200 group/item cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-red-100 text-red-800 flex items-center justify-center font-extrabold text-[10px] shrink-0">
-                        TEL
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-extrabold text-slate-800 text-xs sm:text-[13px] leading-tight">5GB Telecel Data</p>
-                        <p className="text-[10px] text-slate-400 font-bold leading-none mt-0.5">Wholesale cost: GH₵ 17.50</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <div className="text-right">
-                        <p className="font-black text-[#16A34A] text-xs sm:text-[13px] leading-tight">GH₵ 22.00</p>
-                        <p className="text-[9px] text-[#15803D] font-extrabold">Profit: +GH₵ 4.50</p>
-                      </div>
-                      <span className="h-6 px-2 bg-[#16A34A] text-white rounded-md text-[9px] font-bold transition-colors min-h-0 flex items-center justify-center shadow-sm">
-                        View
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dashboard Action Button */}
-                <Link 
-                  href="/register" 
-                  className="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-[12px] flex items-center justify-center transition-colors min-h-0 shadow-md shadow-slate-900/10 cursor-pointer"
-                >
-                  Customize My Store Bundle Catalog
-                </Link>
               </div>
             </div>
 

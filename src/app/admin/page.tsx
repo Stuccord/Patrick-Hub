@@ -36,6 +36,7 @@ export default function AdminDashboard() {
     pendingOrdersCount: 0,
     totalPayoutsSent: 0.00,
     monthlySales: 0.00,
+    apiBalance: 0.00,
   });
 
   const fetchData = useCallback(async (silent = false) => {
@@ -104,6 +105,20 @@ export default function AdminDashboard() {
         .gte('created_at', startOfMonth);
       const monthlySales = monthOrders?.reduce((acc, o) => acc + Number(o.customer_paid), 0) || 0;
 
+      // 9. Fetch GigzHub API Balance
+      let apiBalance = 0.00;
+      try {
+        const apiBalanceRes = await fetch('/api/admin/gigzhub-balance');
+        if (apiBalanceRes.ok) {
+          const apiBalanceData = await apiBalanceRes.json();
+          if (apiBalanceData.success) {
+            apiBalance = Number(apiBalanceData.balance);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching API balance:", err);
+      }
+
       setStats({
         totalSales,
         platformEarnings,
@@ -113,6 +128,7 @@ export default function AdminDashboard() {
         pendingOrdersCount: pendingOrdersCount || 0,
         totalPayoutsSent,
         monthlySales,
+        apiBalance,
       });
 
       // 5. Fetch pending agents list
@@ -268,7 +284,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Row 1 — Core financial stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: Total Sales */}
         <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
           <div className="flex items-center justify-between w-full shrink-0">
@@ -321,7 +337,38 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Card 3: Active Agents */}
+        {/* Card 3: GigzHub API Balance (NEW) */}
+        <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between w-full shrink-0">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${stats.apiBalance < 10 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+              <Coins className="h-4 w-4" />
+            </div>
+            <button className="text-[#9CA3AF] hover:text-[#6B7280] min-h-0 p-1 rounded-md transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 min-w-0 flex-1 flex flex-col justify-end">
+            <h3 className={`text-xl sm:text-2xl font-bold tracking-tight leading-none truncate shrink-0 ${stats.apiBalance < 10 ? 'text-red-500' : 'text-[#111827]'}`}>
+              {formatCurrency(stats.apiBalance)}
+            </h3>
+            <div className="flex items-center justify-between mt-2.5 min-w-0 shrink-0 gap-1.5">
+              <span className="text-[10px] uppercase tracking-[0.05em] text-[#6B7280] font-semibold truncate whitespace-nowrap block flex-1">
+                GigzHub API
+              </span>
+              {stats.apiBalance < 10 ? (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-semibold rounded-full shrink-0 uppercase animate-pulse">
+                  LOW
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#9CA3AF] font-normal leading-none normal-case truncate whitespace-nowrap shrink-0">
+                  Ready
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Active Agents */}
         <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
           <div className="flex items-center justify-between w-full shrink-0">
             <div className="w-9 h-9 bg-[#F0FDF4] rounded-full flex items-center justify-center text-[#16A34A] shrink-0">
@@ -346,7 +393,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Card 4: Withdrawals */}
+        {/* Card 5: Withdrawals */}
         <div className="bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.06)] flex flex-col justify-between h-[135px] min-w-0 overflow-hidden">
           <div className="flex items-center justify-between w-full shrink-0">
             <div className="w-9 h-9 bg-[#FDF2F8] rounded-full flex items-center justify-center text-[#EF4444] shrink-0">

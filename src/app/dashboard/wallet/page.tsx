@@ -11,7 +11,9 @@ import { format } from "date-fns";
 export default function AgentWallet() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [commissionRate, setCommissionRate] = useState(5);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [txnHistory, setTxnHistory] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
   const [amount, setAmount] = useState("");
   const [network, setNetwork] = useState("MTN");
@@ -20,6 +22,11 @@ export default function AgentWallet() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [historyTab, setHistoryTab] = useState<'transactions' | 'withdrawals'>('transactions');
+
+  // Topup State
+  const [topupAmount, setTopupAmount] = useState("");
+  const [isTopupSubmitting, setIsTopupSubmitting] = useState(false);
+  const [topupSuccess, setTopupSuccess] = useState(false);
 
   const fetchWalletData = async () => {
     try {
@@ -78,6 +85,7 @@ export default function AgentWallet() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchWalletData();
   }, []);
 
@@ -147,6 +155,51 @@ export default function AgentWallet() {
     }
   };
 
+  const handleTopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountVal = parseFloat(topupAmount);
+    if (isNaN(amountVal) || amountVal <= 0) return;
+
+    setIsTopupSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const amountInPesewas = Math.round(amountVal * 100);
+      const email = user.email || `${user.id}@patricks-info-tech.com`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const PaystackPop = (await import('@paystack/inline-js')).default as any;
+      const paystack = new PaystackPop();
+      paystack.newTransaction({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+        email: email,
+        amount: amountInPesewas,
+        currency: "GHS",
+        metadata: {
+          type: "agent_topup",
+          agent_id: user.id,
+          amount: amountVal.toString()
+        },
+        onSuccess: () => {
+          setTopupSuccess(true);
+          setTopupAmount("");
+          setIsTopupSubmitting(false);
+          fetchWalletData();
+          setTimeout(() => setTopupSuccess(false), 5000);
+        },
+        onCancel: () => {
+          setIsTopupSubmitting(false);
+        }
+      });
+    } catch (err) {
+      console.error("Error initiating Paystack top-up:", err);
+      alert("Failed to open payment gateway. Please try again.");
+      setIsTopupSubmitting(false);
+    }
+  };
+
   const pendingCount = withdrawalRequests.filter(w => w.status === 'pending').length;
 
   return (
@@ -172,6 +225,43 @@ export default function AgentWallet() {
                 {pendingCount} withdrawal{pendingCount > 1 ? 's' : ''} awaiting approval
               </p>
             )}
+          </div>
+
+          {/* Buy Credit Form */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
+            <h3 className="font-bold text-slate-900 mb-6 text-base sm:text-lg">Buy Credit (Top Up)</h3>
+            
+            {topupSuccess && (
+              <div className="bg-green-50 text-green-700 p-4 rounded-xl text-xs sm:text-sm font-bold border border-green-200 mb-6 flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+                Wallet topped up successfully! Your new balance is reflected above.
+              </div>
+            )}
+
+            <form onSubmit={handleTopup} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs sm:text-sm font-bold text-slate-700">Amount to Buy (GHS)</label>
+                <input 
+                  type="number" 
+                  required
+                  min="1"
+                  step="0.01"
+                  value={topupAmount}
+                  onChange={(e) => setTopupAmount(e.target.value)}
+                  placeholder="e.g. 50.00"
+                  className="w-full px-4 h-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none font-bold text-slate-900 bg-white"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={isTopupSubmitting || !topupAmount || parseFloat(topupAmount) <= 0}
+                className="w-full bg-brand-primary text-white h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-dark transition-colors disabled:opacity-50 mt-6 btn-animate shadow-lg shadow-brand-primary/20 cursor-pointer"
+              >
+                {isTopupSubmitting ? "Opening Payment..." : "Buy Credit"}
+                {!isTopupSubmitting && <ArrowRight className="w-5 h-5" />}
+              </button>
+            </form>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">

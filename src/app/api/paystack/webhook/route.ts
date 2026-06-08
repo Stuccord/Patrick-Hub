@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { sendAgentSaleNotification } from '@/lib/emails';
-import { placeDataHustleOrder } from '@/lib/datahustle';
+import { sendAgentSaleNotification, sendAgentTopupNotification } from '@/lib/emails';
+import { placeGigzHubOrder } from '@/lib/gigzhub';
 
 // Webhook requires raw body for signature verification, but Next.js App Router exposes req.text()
 export async function POST(req: Request) {
@@ -31,9 +31,9 @@ export async function POST(req: Request) {
     if (event.event === 'charge.success') {
       const { reference, metadata } = event.data;
 
-      if (!metadata || !metadata.agent_id || !metadata.bundle_id) {
-        console.error('Missing metadata in charge.success event:', metadata);
-        return NextResponse.json({ status: 'ignored - missing metadata' });
+      if (!metadata || !metadata.agent_id) {
+        console.error('Missing agent_id in charge.success event:', metadata);
+        return NextResponse.json({ status: 'ignored - missing agent_id' });
       }
 
       // Initialize Supabase admin client to bypass RLS
@@ -41,6 +41,62 @@ export async function POST(req: Request) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       );
+
+      // Handle agent wallet top-up
+      if (metadata.type === 'agent_topup') {
+        const { data: existingTx } = await supabase
+          .from('wallet_transactions')
+          .select('id')
+          .like('description', `%${reference}%`)
+          .maybeSingle();
+
+        if (existingTx) {
+          return NextResponse.json({ status: 'already processed' });
+        }
+
+        const [userRes, walletRes] = await Promise.all([
+          supabase.from('users').select('name, email').eq('id', metadata.agent_id).single(),
+          supabase.from('wallets').select('balance').eq('agent_id', metadata.agent_id).single()
+        ]);
+
+        if (userRes.error || walletRes.error || !walletRes.data) {
+          console.error('Error fetching user or wallet for top-up', userRes.error, walletRes.error);
+          return NextResponse.json({ error: 'Database fetch error' }, { status: 500 });
+        }
+
+        const topupAmount = Number(metadata.amount);
+        const newBalance = Number((Number(walletRes.data.balance) + topupAmount).toFixed(2));
+
+        const { error: walletError } = await supabase
+          .from('wallets')
+          .update({ balance: newBalance })
+          .eq('agent_id', metadata.agent_id);
+
+        if (walletError) throw walletError;
+
+        const { error: txnError } = await supabase.from('wallet_transactions').insert([{
+          agent_id: metadata.agent_id,
+          type: 'credit',
+          amount: topupAmount,
+          description: `Wallet top-up via Paystack (Ref: ${reference})`
+        }]);
+
+        if (txnError) throw txnError;
+
+        await sendAgentTopupNotification(
+          userRes.data.email,
+          userRes.data.name,
+          topupAmount,
+          newBalance
+        );
+
+        return NextResponse.json({ status: 'success', message: 'Wallet topped up' });
+      }
+
+      if (!metadata.bundle_id) {
+        console.error('Missing bundle_id in charge.success event:', metadata);
+        return NextResponse.json({ status: 'ignored - missing bundle_id' });
+      }
 
       // Check if order already exists to prevent duplicate processing
       const { data: existingOrder } = await supabase
@@ -88,12 +144,12 @@ export async function POST(req: Request) {
 
       if (orderError) throw orderError;
 
-      // 3. Attempt to automatically fulfill via DataHustle
-      const result = await placeDataHustleOrder(
+      // 3. Attempt to automatically fulfill via GigzHub
+      const result = await placeGigzHubOrder(
         metadata.customer_phone,
         bundleRes.data.network,
         Number(bundleRes.data.size_gb),
-        bundleRes.data.cheapgigz_id
+        bundleRes.data.cheapgigz_id  // GigzHub network code override (e.g. 'MTNUP2U')
       );
 
         if (result.success) {
@@ -135,15 +191,16 @@ export async function POST(req: Request) {
           );
         } else {
           // Auto-fulfillment failed — order stays pending for manual admin action
-          console.warn('[Webhook] DataHustle auto-fulfillment failed:', result.message);
+          console.warn('[Webhook] GigzHub auto-fulfillment failed:', result.message);
         }
 
       return NextResponse.json({ status: 'success' });
     }
 
     return NextResponse.json({ status: 'ignored' });
-  } catch (error: any) {
-    console.error('Webhook error:', error);
-    return NextResponse.json({ error: 'Webhook processing error', details: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Webhook error:', err);
+    return NextResponse.json({ error: 'Webhook processing error', details: err.message }, { status: 500 });
   }
 }

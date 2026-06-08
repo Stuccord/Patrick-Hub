@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { placeDataHustleOrder } from '@/lib/datahustle';
+import { placeGigzHubOrder } from '@/lib/gigzhub';
 
 export async function POST(req: Request) {
   try {
@@ -45,17 +45,17 @@ export async function POST(req: Request) {
     const capacityOverride = order.bundles?.cheapgigz_id;
 
     if (capacityOverride || order.bundles?.network) {
-      // Try to deliver via DataHustle API
-      const result = await placeDataHustleOrder(
+      // Try to deliver via GigzHub API
+      const result = await placeGigzHubOrder(
         order.customer_phone,
         order.bundles?.network ?? '',
         Number(order.bundles?.size_gb ?? 0),
-        capacityOverride
+        capacityOverride  // GigzHub network code override (e.g. 'MTNUP2U')
       );
 
       if (!result.success) {
         return NextResponse.json(
-          { error: `DataHustle delivery failed: ${result.message}` },
+          { error: `GigzHub delivery failed: ${result.message}` },
           { status: 502 }
         );
       }

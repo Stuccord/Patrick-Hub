@@ -1,8 +1,9 @@
 -- Patrick's Info Tech Supabase Schema
 
 -- Users Table
+-- id maps directly to auth.users.id (FK with CASCADE ensures full cleanup on auth delete)
 CREATE TABLE users (
-  id UUID PRIMARY KEY, -- Maps to Supabase auth.users.id
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT NOT NULL,
@@ -15,6 +16,19 @@ CREATE TABLE users (
   logo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Trigger: auto-delete public.users row when auth.users is deleted (belt-and-suspenders)
+CREATE OR REPLACE FUNCTION public.handle_auth_user_delete()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  DELETE FROM public.users WHERE id = OLD.id;
+  RETURN OLD;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER on_auth_user_deleted
+  AFTER DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_delete();
 
 -- Bundles Table
 CREATE TABLE bundles (

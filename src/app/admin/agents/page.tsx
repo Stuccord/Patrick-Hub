@@ -61,19 +61,22 @@ export default function AdminAgents() {
   };
 
   const deleteAgent = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this agent? This will permanently delete their account and history.")) return;
+    if (!confirm("Are you sure you want to delete this agent? This will permanently delete their account, login access, and all history.")) return;
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', id);
+      // Call server-side route — uses service role key to delete from Supabase Auth
+      const res = await fetch('/api/admin/delete-agent', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: id }),
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to delete agent');
+
       fetchAgents();
     } catch (err) {
       console.error(err);
-      alert("Error deleting agent");
+      alert("Error deleting agent: " + (err as Error).message);
     }
   };
 

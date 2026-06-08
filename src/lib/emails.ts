@@ -155,3 +155,38 @@ export async function sendWithdrawalProcessedNotification(
     return { success: false, error };
   }
 }
+
+export async function sendAgentTopupNotification(
+  agentEmail: string,
+  agentName: string,
+  amount: number,
+  newBalance: number
+) {
+  const subject = 'Wallet Top-up Successful!';
+  const html = `
+    <h1>Wallet Top-up Confirmed</h1>
+    <p>Hi ${agentName},</p>
+    <p>Your wallet has been successfully topped up with <strong>GHS ${amount.toFixed(2)}</strong>.</p>
+    <p>Your new available balance is <strong>GHS ${newBalance.toFixed(2)}</strong>.</p>
+    <p>Thank you for partnering with us!</p>
+  `;
+
+  if (!resend) {
+    logEmailLocal(subject, agentEmail, `Wallet top-up of GHS ${amount.toFixed(2)} succeeded. New balance: GHS ${newBalance.toFixed(2)}.`);
+    return { success: true, mocked: true };
+  }
+
+  try {
+    const data = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: agentEmail,
+      subject,
+      html,
+    });
+    return { success: true, data };
+  } catch (error) {
+    console.error('Failed to send wallet top-up email:', error);
+    return { success: false, error };
+  }
+}
+

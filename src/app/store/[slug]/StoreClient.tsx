@@ -5,6 +5,64 @@ import { formatCurrency } from "@/lib/pricing";
 import { Phone, ArrowRight, Zap, Loader2, ArrowLeft, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 
+const MtnLogo = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 shrink-0 rounded-xl overflow-hidden shadow-sm border border-amber-200/50">
+    <rect width="100" height="100" fill="#FFCC00" />
+    <ellipse cx="50" cy="50" rx="36" ry="22" fill="none" stroke="#002F6C" strokeWidth="4" />
+    <text x="50" y="57" fontSize="18" fontWeight="900" fontFamily="'Impact', 'Arial Black', sans-serif" textAnchor="middle" fill="#002F6C" letterSpacing="1">MTN</text>
+  </svg>
+);
+
+const TelecelLogo = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 shrink-0 rounded-xl overflow-hidden shadow-sm border border-rose-200/50">
+    <rect width="100" height="100" fill="#E60000" />
+    <text x="50" y="66" fontSize="56" fontWeight="bold" fontFamily="'Trebuchet MS', sans-serif" textAnchor="middle" fill="#FFFFFF">t</text>
+  </svg>
+);
+
+const AirtelTigoLogo = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 shrink-0 rounded-xl overflow-hidden shadow-sm border border-blue-200/50">
+    <rect width="100" height="100" fill="#0056B3" />
+    <circle cx="38" cy="50" r="24" fill="#E11D48" />
+    <circle cx="62" cy="50" r="24" fill="#2563EB" />
+    <path d="M 50 26 A 24 24 0 0 0 50 74 A 24 24 0 0 0 50 26 Z" fill="#7C3AED" />
+    <text x="50" y="57" fontSize="16" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" fill="#FFFFFF">AT</text>
+  </svg>
+);
+
+const getNetworkStyles = (network: string) => {
+  const net = network?.toUpperCase() || "";
+  if (net === "MTN") {
+    return {
+      cardBg: "bg-amber-50/70",
+      cardBorder: "border-amber-200/80",
+      iconBg: "bg-amber-100 text-amber-600",
+      priceColor: "text-amber-700",
+      labelBg: "bg-amber-100 text-amber-800",
+      buttonBg: "bg-amber-600 hover:bg-amber-700 active:bg-amber-800"
+    };
+  }
+  if (net === "VODAFONE" || net === "TELECEL") {
+    return {
+      cardBg: "bg-rose-50/70",
+      cardBorder: "border-rose-200/80",
+      iconBg: "bg-rose-100 text-rose-600",
+      priceColor: "text-rose-700",
+      labelBg: "bg-rose-100 text-rose-800",
+      buttonBg: "bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
+    };
+  }
+  // AirtelTigo / Airtel / Tigo / Other
+  return {
+    cardBg: "bg-blue-50/70",
+    cardBorder: "border-blue-200/80",
+    iconBg: "bg-blue-100 text-blue-600",
+    priceColor: "text-blue-700",
+    labelBg: "bg-blue-100 text-blue-800",
+    buttonBg: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
+  };
+};
+
 export default function StoreClient({ slug }: { slug: string }) {
   const [agent, setAgent] = useState<any>(null);
   const [bundles, setBundles] = useState<any[]>([]);
@@ -186,29 +244,35 @@ export default function StoreClient({ slug }: { slug: string }) {
 
             <div className="space-y-4">
               {bundles.map((bundle) => {
+                const styles = getNetworkStyles(bundle.network);
                 return (
                   <div 
                     key={bundle.id} 
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
+                    className={`${styles.cardBg} ${styles.cardBorder} rounded-2xl border shadow-sm overflow-hidden flex flex-col`}
                   >
                     <div className="p-5 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-brand-light text-brand-primary flex items-center justify-center shrink-0">
-                          <Zap className="h-6 w-6" />
-                        </div>
+                        {bundle.network === 'MTN' && <MtnLogo />}
+                        {(bundle.network === 'Vodafone' || bundle.network === 'Telecel') && <TelecelLogo />}
+                        {(bundle.network === 'AirtelTigo' || bundle.network === 'AT') && <AirtelTigoLogo />}
+                        {bundle.network !== 'MTN' && 
+                         bundle.network !== 'Vodafone' && 
+                         bundle.network !== 'Telecel' && 
+                         bundle.network !== 'AirtelTigo' && 
+                         bundle.network !== 'AT' && (
+                          <div className={`w-12 h-12 rounded-xl ${styles.iconBg} flex items-center justify-center shrink-0`}>
+                            <Zap className="h-6 w-6" />
+                          </div>
+                        )}
                         <div>
                           <h4 className="font-bold text-slate-900 text-base">{bundle.name}</h4>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wider ${
-                            bundle.network === 'MTN' ? 'bg-yellow-100 text-yellow-800' :
-                            bundle.network === 'Vodafone' ? 'bg-red-100 text-red-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wider ${styles.labelBg}`}>
                             {bundle.network}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-black text-brand-primary">
+                        <div className={`text-xl font-black ${styles.priceColor}`}>
                           {formatCurrency(bundle.agent_price)}
                         </div>
                         <p className="text-[9px] text-slate-400 font-extrabold uppercase">Plus GHS {platformFee.toFixed(2)} Fee</p>
@@ -216,7 +280,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                     </div>
                     <button 
                       onClick={() => handleBundleSelect(bundle)}
-                      className="w-full bg-slate-900 hover:bg-brand-primary text-white py-3.5 text-sm font-bold transition-all btn-animate min-h-[48px]"
+                      className={`w-full bg-slate-900 ${styles.buttonBg} text-white py-3.5 text-sm font-bold transition-all btn-animate min-h-[48px] cursor-pointer`}
                     >
                       Buy Now
                     </button>
@@ -270,13 +334,16 @@ export default function StoreClient({ slug }: { slug: string }) {
                         key={net.id}
                         type="button"
                         onClick={() => setNetwork(net.id)}
-                        className={`p-3 rounded-xl border-2 text-center transition-all min-h-[48px] flex flex-col items-center justify-center gap-1 ${
+                        className={`p-3 rounded-xl border-2 text-center transition-all min-h-[72px] flex flex-col items-center justify-center gap-2 ${
                           isSelected 
                             ? `${net.color} border-brand-primary text-brand-primary font-black scale-102` 
-                            : "border-slate-200 text-slate-600 font-bold hover:border-slate-300"
+                            : "border-slate-200 text-slate-600 font-bold hover:border-slate-300 bg-white"
                         }`}
                       >
-                        <span className="text-xs tracking-tight">{net.name}</span>
+                        {net.id === "MTN" && <MtnLogo />}
+                        {net.id === "Vodafone" && <TelecelLogo />}
+                        {net.id === "AirtelTigo" && <AirtelTigoLogo />}
+                        <span className="text-xs tracking-tight font-extrabold">{net.name}</span>
                       </button>
                     );
                   })}
@@ -406,7 +473,7 @@ export default function StoreClient({ slug }: { slug: string }) {
       {/* Footer */}
       <footer className="py-6 text-center border-t border-slate-200 bg-white">
         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-          Powered by <span className="text-slate-600 font-extrabold">Patrick's Info Tech Platform</span>
+          Powered by <span className="text-slate-600 font-extrabold">Patrick&apos;s Info Tech Platform</span>
         </p>
       </footer>
     </div>
