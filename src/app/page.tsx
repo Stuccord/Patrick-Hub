@@ -1038,7 +1038,7 @@ export default function LandingPage() {
               &copy; 2025 Patrick&apos;s Info Tech. All rights reserved.
             </p>
             <p className="text-xs text-slate-600 font-medium">
-              Made with 💚 for Ghanaian Entrepreneurs
+              Made by <a href="https://stuccord.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors duration-200 underline font-bold">stuccord.com</a>
             </p>
           </div>
 
