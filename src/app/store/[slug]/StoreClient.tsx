@@ -63,17 +63,35 @@ const getNetworkStyles = (network: string) => {
   };
 };
 
+interface Agent {
+  id: string | null;
+  name: string;
+  username: string;
+  tagline: string;
+}
+
+interface Bundle {
+  id: string;
+  name: string;
+  network: string;
+  size_gb: number;
+  min_resell_price: number;
+  base_price: number;
+  is_active: boolean;
+  agent_price: number;
+  base_cost: number;
+}
+
 export default function StoreClient({ slug }: { slug: string }) {
-  const [agent, setAgent] = useState<any>(null);
-  const [bundles, setBundles] = useState<any[]>([]);
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [bundles, setBundles] = useState<Bundle[]>([]);
   const [platformFee, setPlatformFee] = useState(0.20);
 
   // Flow State: 1 = Select Bundle, 2 = Recipient Info, 3 = Summary, 4 = MoMo Payment, 5 = Success
   const [step, setStep] = useState(1);
-  const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [selectedBundle, setSelectedBundle] = useState<Bundle | null>(null);
   const [phone, setPhone] = useState("");
   const [network, setNetwork] = useState("MTN");
-  const [pin, setPin] = useState("");
   
   const [isLoading, setIsLoading] = useState(false);
   const [reference, setReference] = useState("");
@@ -128,7 +146,7 @@ export default function StoreClient({ slug }: { slug: string }) {
     fetchData();
   }, [slug]);
 
-  const handleBundleSelect = (bundle: any) => {
+  const handleBundleSelect = (bundle: Bundle) => {
     setSelectedBundle(bundle);
     setNetwork(bundle.network);
     setStep(2);
@@ -141,13 +159,14 @@ export default function StoreClient({ slug }: { slug: string }) {
   };
 
   const handlePay = async () => {
-    if (!agent.id || !selectedBundle) return;
+    if (!agent || !agent.id || !selectedBundle) return;
     
     setIsLoading(true);
     const dummyEmail = `${phone.replace(/\s+/g, '')}@patricks-info-tech.com`;
     const amountInPesewas = Math.round((selectedBundle.agent_price + platformFee) * 100);
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const PaystackPop = (await import('@paystack/inline-js')).default as any;
       const paystack = new PaystackPop();
       paystack.newTransaction({
@@ -175,7 +194,7 @@ export default function StoreClient({ slug }: { slug: string }) {
           customer_paid: (selectedBundle.agent_price + platformFee).toString(),
           platform_fee: platformFee.toString()
         },
-        onSuccess: (transaction: any) => {
+        onSuccess: (transaction: { reference: string }) => {
           setReference(transaction.reference);
           setIsLoading(false);
           setStep(5); // Show success screen immediately, webhook handles backend
@@ -512,7 +531,6 @@ export default function StoreClient({ slug }: { slug: string }) {
                   setStep(1);
                   setSelectedBundle(null);
                   setPhone("");
-                  setPin("");
                 }}
                 className="bg-brand-primary text-white w-full sm:w-auto px-8 py-4 rounded-xl font-bold hover:bg-brand-dark transition-colors shadow-lg shadow-brand-primary/20 min-h-[48px] btn-animate text-xs sm:text-sm"
               >
@@ -525,9 +543,12 @@ export default function StoreClient({ slug }: { slug: string }) {
       </main>
 
       {/* Footer */}
-      <footer className="py-6 text-center border-t border-slate-200 bg-white">
+      <footer className="py-6 text-center border-t border-slate-200 bg-white space-y-2">
         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
           Powered by <span className="text-slate-600 font-extrabold">Patrick&apos;s Info Tech Platform</span>
+        </p>
+        <p className="text-xs text-slate-400">
+          Need help? <a href="https://wa.me/233276915317" target="_blank" rel="noopener noreferrer" className="text-brand-primary font-bold hover:underline inline-flex items-center gap-1">💬 WhatsApp Support</a>
         </p>
       </footer>
     </div>

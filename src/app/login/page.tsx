@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { ArrowRight, Mail, Lock, Store, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,14 +17,13 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    const errorParam = searchParams.get("error");
-    if (errorParam === "pending_approval") {
-      setError("Your account is awaiting approval by an administrator.");
-    } else if (errorParam === "suspended") {
-      setError("Your account has been suspended.");
-    }
-  }, [searchParams]);
+  const errorParam = searchParams.get("error");
+  const urlError =
+    errorParam === "pending_approval"
+      ? "Your account is awaiting approval by an administrator."
+      : errorParam === "suspended"
+        ? "Your account has been suspended."
+        : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,9 +65,10 @@ function LoginContent() {
           router.push("/dashboard");
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Invalid login credentials");
+      const errorMessage = err instanceof Error ? err.message : "Invalid login credentials";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -87,14 +87,14 @@ function LoginContent() {
             <Store className="h-8 w-8" />
           </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Welcome Back</h1>
-          <p className="text-sm text-slate-500">Sign in to your Patrick's Info Tech account</p>
+          <p className="text-sm text-slate-500">Sign in to your Patrick&apos;s Info Tech account</p>
         </div>
 
         <div className="bg-white p-5 sm:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 space-y-6">
-          {error && (
+          {(error || urlError) && (
             <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex items-start gap-2">
               <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>{error}</span>
+              <span>{error || urlError}</span>
             </div>
           )}
           
@@ -155,7 +155,7 @@ function LoginContent() {
 
           <div className="text-center space-y-4">
             <p className="text-sm text-slate-500">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/register" className="font-bold text-brand-primary hover:underline">
                 Register as Agent
               </Link>

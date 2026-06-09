@@ -69,9 +69,10 @@ export default function StoreSettings() {
         .getPublicUrl(filePath);
 
       setFormData(prev => ({ ...prev, logoUrl: publicUrlData.publicUrl }));
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error uploading logo:", err);
-      alert(`Failed to upload logo: ${err.message || err.details || err.toString()}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(`Failed to upload logo: ${errorMessage}`);
     }
   };
 
@@ -122,6 +123,7 @@ export default function StoreSettings() {
                 onClick={() => fileInputRef.current?.click()}
               >
               {formData.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={formData.logoUrl} alt="Store Logo" className="w-full h-full object-cover" />
               ) : (
                 <>

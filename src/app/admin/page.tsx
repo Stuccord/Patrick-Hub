@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { formatCurrency } from "@/lib/pricing";
 import { 
-  Filter,
   CheckCircle2,
   XCircle,
   MoreHorizontal,
@@ -19,13 +18,44 @@ import {
   CalendarDays
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
-import { sendAgentApprovalNotification, sendWithdrawalProcessedNotification } from "@/lib/emails";
+import { sendAgentApprovalNotification } from "@/lib/emails";
+
+interface PendingAgent {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface Withdrawal {
+  id: string;
+  agent: string;
+  agentEmail: string;
+  amount: number;
+  net: number;
+  commission: number;
+  status: string;
+  momo: string;
+  momoNumber: string;
+  network: string;
+  created_at: string;
+}
+
+interface DBWithdrawal {
+  id: string;
+  amount_requested: string | number;
+  payout_amount: string | number;
+  status: string;
+  momo_number: string;
+  network: string;
+  created_at: string;
+  users?: { name: string; email: string } | null;
+}
 
 export default function AdminDashboard() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pendingAgents, setPendingAgents] = useState<any[]>([]);
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [pendingAgents, setPendingAgents] = useState<PendingAgent[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [withdrawalTab, setWithdrawalTab] = useState<'pending' | 'history'>('pending');
   const [stats, setStats] = useState({
     totalSales: 0.00,
@@ -147,7 +177,7 @@ export default function AdminDashboard() {
         .order('created_at', { ascending: false })
         .limit(30);
 
-      const formattedWithdrawals = (dbWithdrawals || []).map((w: any) => ({
+      const formattedWithdrawals = ((dbWithdrawals || []) as unknown as DBWithdrawal[]).map((w) => ({
         id: w.id,
         agent: w.users?.name || 'Unknown Agent',
         agentEmail: w.users?.email || '',
@@ -171,6 +201,7 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // Auto-refresh every 30 seconds
     const interval = setInterval(() => fetchData(true), 30000);
@@ -212,7 +243,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleApproveWithdrawal = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number, commission: number) => {
+  const handleApproveWithdrawal = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number) => {
     if (!confirm(`Are you sure you want to approve this withdrawal request for ${formatCurrency(payout)}?`)) {
       return;
     }
@@ -235,17 +266,18 @@ export default function AdminDashboard() {
 
         alert(override ? "Withdrawal marked as manually paid!" : "Payout processed successfully via Paystack!");
         fetchData();
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
+        const errMessage = err instanceof Error ? err.message : String(err);
         if (!override) {
           const forceConfirm = confirm(
-            `Automated payout via Paystack failed:\n"${err.message}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
+            `Automated payout via Paystack failed:\n"${errMessage}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
           );
           if (forceConfirm) {
             await processPayout(true);
           }
         } else {
-          alert(`Error approving withdrawal: ${err.message}`);
+          alert(`Error approving withdrawal: ${errMessage}`);
         }
       }
     };
@@ -658,7 +690,7 @@ export default function AdminDashboard() {
                           <span className="text-[14px] font-bold text-[#111827] mt-1 block leading-none truncate">{formatCurrency(w.net)}</span>
                         </div>
                         <button 
-                          onClick={() => handleApproveWithdrawal(w.id, w.agent, w.agentEmail, w.amount, w.net, w.commission)}
+                          onClick={() => handleApproveWithdrawal(w.id, w.agent, w.agentEmail, w.amount, w.net)}
                           className="h-7.5 px-3 bg-white border border-[#D1D5DB] hover:border-[#16A34A] hover:bg-[#F0FDF4] hover:text-[#15803D] text-[#374151] rounded-lg text-[12px] font-semibold transition-colors cursor-pointer min-h-0 flex items-center justify-center shrink-0"
                         >
                           Process Payout

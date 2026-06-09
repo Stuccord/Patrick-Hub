@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/pricing";
 import { 
@@ -34,9 +34,7 @@ function CheckoutContent() {
   const [platformFee, setPlatformFee] = useState(0.20);
   const [phone, setPhone] = useState(searchParams.get("phone") || "");
   const [network, setNetwork] = useState('');
-
-  // Stable fallback reference generated once (not on every render)
-  const fallbackRef = useRef(`TXN-${Date.now().toString(36).toUpperCase()}`);
+  const [fallbackRef, setFallbackRef] = useState("");
 
   // Get data from URL
   const bundleName = searchParams.get("bundle") || "Data Bundle";
@@ -107,6 +105,8 @@ function CheckoutContent() {
       }
     }
     loadPaymentDetails();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFallbackRef(`TXN-${Date.now().toString(36).toUpperCase()}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundleName]);
 
@@ -186,7 +186,7 @@ function CheckoutContent() {
           </div>
 
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs text-slate-400 font-mono text-center">
-            REF: {reference || fallbackRef.current}
+            REF: {reference || fallbackRef}
           </div>
           <Link 
             href="/" 

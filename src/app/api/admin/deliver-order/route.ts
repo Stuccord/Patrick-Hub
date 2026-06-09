@@ -101,8 +101,9 @@ export async function POST(req: Request) {
     if (txError) throw txError;
 
     return NextResponse.json({ status: 'completed', message: 'Order delivered and agent credited' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Admin Deliver] Error:', error);
-    return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

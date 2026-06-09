@@ -4,10 +4,21 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Search, Filter } from "lucide-react";
 import { formatCurrency } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase";
-import { sendWithdrawalProcessedNotification } from "@/lib/emails";
+
+interface WithdrawalRequest {
+  id: string;
+  agent_id: string;
+  amount_requested: string | number;
+  payout_amount: string | number;
+  status: string;
+  momo_number: string;
+  network: string;
+  created_at: string;
+  users?: { id: string; name: string; email: string } | null;
+}
 
 export default function AdminWithdrawals() {
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const fetchWithdrawals = async () => {
@@ -19,17 +30,18 @@ export default function AdminWithdrawals() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setWithdrawals(data || []);
+      setWithdrawals((data as unknown as WithdrawalRequest[]) || []);
     } catch (err) {
       console.error("Error fetching withdrawals:", err);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchWithdrawals();
   }, []);
 
-  const handleApprove = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number, commission: number) => {
+  const handleApprove = async (id: string, agentName: string, agentEmail: string, reqAmount: number, payout: number) => {
     if (!confirm(`Are you sure you want to approve this withdrawal request for ${formatCurrency(payout)}?`)) {
       return;
     }
@@ -52,17 +64,18 @@ export default function AdminWithdrawals() {
 
         alert(override ? "Withdrawal marked as manually paid!" : "Payout processed successfully via Paystack!");
         fetchWithdrawals();
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
+        const errMessage = err instanceof Error ? err.message : String(err);
         if (!override) {
           const forceConfirm = confirm(
-            `Automated payout via Paystack failed:\n"${err.message}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
+            `Automated payout via Paystack failed:\n"${errMessage}"\n\nWould you like to manually mark this withdrawal as approved (force approve)?`
           );
           if (forceConfirm) {
             await processPayout(true);
           }
         } else {
-          alert(`Error approving withdrawal: ${err.message}`);
+          alert(`Error approving withdrawal: ${errMessage}`);
         }
       }
     };
@@ -197,7 +210,7 @@ export default function AdminWithdrawals() {
                           {req.status === 'pending' ? (
                             <>
                               <button 
-                                onClick={() => handleApprove(req.id, req.users?.name || 'Agent Partner', req.users?.email || '', Number(req.amount_requested), Number(req.payout_amount), commission)}
+                                onClick={() => handleApprove(req.id, req.users?.name || 'Agent Partner', req.users?.email || '', Number(req.amount_requested), Number(req.payout_amount))}
                                 className="h-7 px-2.5 bg-[#16A34A] text-white hover:bg-[#15803D] rounded-md text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-0 shadow-sm"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Approve
@@ -267,7 +280,7 @@ export default function AdminWithdrawals() {
                   {req.status === 'pending' && (
                     <div className="flex items-center gap-2 pt-1">
                       <button 
-                        onClick={() => handleApprove(req.id, req.users?.name || 'Agent Partner', req.users?.email || '', Number(req.amount_requested), Number(req.payout_amount), commission)}
+                        onClick={() => handleApprove(req.id, req.users?.name || 'Agent Partner', req.users?.email || '', Number(req.amount_requested), Number(req.payout_amount))}
                         className="flex-1 h-9 bg-[#16A34A] text-white rounded-lg font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-0"
                       >
                         <CheckCircle2 className="w-4.5 h-4.5" /> Approve

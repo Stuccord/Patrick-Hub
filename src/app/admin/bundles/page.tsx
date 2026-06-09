@@ -1,15 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, Search, Filter, X } from "lucide-react";
+import { Plus, Edit2, Trash2, Search, X } from "lucide-react";
 import { formatCurrency } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase";
 
+interface Bundle {
+  id: string;
+  name: string;
+  size_gb: number;
+  network: string;
+  base_price: number;
+  min_resell_price: number;
+  cheapgigz_id?: string | null;
+  is_active: boolean;
+}
+
 export default function AdminBundles() {
-  const [bundles, setBundles] = useState<any[]>([]);
+  const [bundles, setBundles] = useState<Bundle[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBundle, setEditingBundle] = useState<any | null>(null);
+  const [editingBundle, setEditingBundle] = useState<Bundle | null>(null);
 
   // Form states
   const [name, setName] = useState("");
@@ -29,13 +40,14 @@ export default function AdminBundles() {
         .order('network', { ascending: true })
         .order('size_gb', { ascending: true });
       if (error) throw error;
-      setBundles(data || []);
+      setBundles((data as Bundle[]) || []);
     } catch (err) {
       console.error("Error fetching bundles:", err);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBundles();
   }, []);
 
@@ -51,7 +63,7 @@ export default function AdminBundles() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (bundle: any) => {
+  const openEditModal = (bundle: Bundle) => {
     setEditingBundle(bundle);
     setName(bundle.name);
     setSizeGb(bundle.size_gb.toString());
@@ -83,9 +95,9 @@ export default function AdminBundles() {
         throw error;
       }
       fetchBundles();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err.message || "Error deleting bundle");
+      alert((err as Error).message || "Error deleting bundle");
     }
   };
 
@@ -127,9 +139,10 @@ export default function AdminBundles() {
 
       setIsModalOpen(false);
       fetchBundles();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(`Error saving bundle: ${err.message || err.details || err.toString()}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(`Error saving bundle: ${errorMessage}`);
     }
   };
 

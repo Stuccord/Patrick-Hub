@@ -30,6 +30,7 @@ export default function AdminPricing() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchConfig();
   }, []);
 
@@ -76,7 +77,7 @@ export default function AdminPricing() {
         <div className="space-y-3.5">
           <div>
             <h3 className="font-semibold text-[#111827] text-base">Global Transaction Fee</h3>
-            <p className="text-[12px] text-[#6B7280] mt-0.5">This flat fee is added to every customer purchase on top of the agent's selling price.</p>
+            <p className="text-[12px] text-[#6B7280] mt-0.5">This flat fee is added to every customer purchase on top of the agent&apos;s selling price.</p>
           </div>
           
           <div className="flex items-center gap-4 w-full sm:max-w-xs">

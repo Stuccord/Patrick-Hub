@@ -139,8 +139,9 @@ export async function POST(req: Request) {
       message: manualOverride ? 'Withdrawal marked as manually paid' : 'Payout processed successfully via Paystack',
       transferCode
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[Payout] Unexpected error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    const errMessage = err instanceof Error ? err.message : 'Internal server error';
+    return NextResponse.json({ error: errMessage }, { status: 500 });
   }
 }

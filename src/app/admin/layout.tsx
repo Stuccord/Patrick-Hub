@@ -101,7 +101,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm">
             PI
           </div>
-          <span className="text-base font-semibold text-[#111827] tracking-tight">Patrick's Info Tech</span>
+          <span className="text-base font-semibold text-[#111827] tracking-tight">Patrick&apos;s Info Tech</span>
         </div>
 
         {/* Navigation - Font: 14px, color #6B7280 (inactive), padding: 10px 16px, border-radius: 8px */}
@@ -217,7 +217,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm">
                 PI
               </div>
-              <span className="text-base font-semibold text-[#111827] tracking-tight mr-2">Patrick's Info Tech</span>
+              <span className="text-base font-semibold text-[#111827] tracking-tight mr-2">Patrick&apos;s Info Tech</span>
             </div>
 
             {/* Search Bar - max-width 400px, height 36px, border-radius 8px */}

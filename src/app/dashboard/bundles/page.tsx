@@ -5,8 +5,32 @@ import { Info, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 
+interface AgentBundle {
+  id: string;
+  name: string;
+  network: string;
+  size_gb: number;
+  base_cost: number;
+  min_resell: number;
+  agent_price: number;
+}
+
+interface DBActiveBundle {
+  id: string;
+  name: string;
+  network: string;
+  size_gb: number;
+  base_price: string | number;
+  min_resell_price: string | number;
+}
+
+interface DBAgentOverride {
+  bundle_id: string;
+  selling_price: string | number;
+}
+
 export default function AgentBundles() {
-  const [bundles, setBundles] = useState<any[]>([]);
+  const [bundles, setBundles] = useState<AgentBundle[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
 
   const fetchBundlesAndPricing = async () => {
@@ -34,11 +58,13 @@ export default function AgentBundles() {
       if (overridesError) throw overridesError;
 
       // 3. Merge them
-      const merged = (activeBundles || []).map((b: any) => {
-        const override = (agentOverrides || []).find((o: any) => o.bundle_id === b.id);
+      const merged = ((activeBundles || []) as unknown as DBActiveBundle[]).map((b) => {
+        const override = ((agentOverrides || []) as unknown as DBAgentOverride[]).find((o) => o.bundle_id === b.id);
         return {
           id: b.id,
           name: b.name,
+          network: b.network,
+          size_gb: Number(b.size_gb),
           base_cost: Number(b.base_price),
           min_resell: Number(b.min_resell_price),
           agent_price: override ? Number(override.selling_price) : Number(b.min_resell_price)
@@ -52,6 +78,7 @@ export default function AgentBundles() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBundlesAndPricing();
   }, []);
 
@@ -91,9 +118,10 @@ export default function AgentBundles() {
         setSaving(null);
         fetchBundlesAndPricing();
       }, 600);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(`Error saving custom selling price: ${err.message || err.details || err.toString()}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(`Error saving custom selling price: ${errorMessage}`);
       setSaving(null);
     }
   };
@@ -110,7 +138,7 @@ export default function AgentBundles() {
         <div className="text-xs sm:text-sm text-blue-800 space-y-2">
           <p><strong>Pricing Rules:</strong></p>
           <ul className="list-disc list-inside space-y-1">
-            <li>You cannot set a price lower than the Admin's Minimum Resell Price.</li>
+            <li>You cannot set a price lower than the Admin&apos;s Minimum Resell Price.</li>
             <li>Your Profit Margin = Your Selling Price - Base Cost Price.</li>
             <li>A flat platform fee (GHS 0.20) will be added at checkout for the customer.</li>
           </ul>
@@ -125,6 +153,7 @@ export default function AgentBundles() {
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
               <tr>
                 <th className="px-6 py-4 font-bold">Bundle</th>
+                <th className="px-6 py-4 font-bold">Size</th>
                 <th className="px-6 py-4 font-bold">Base Cost</th>
                 <th className="px-6 py-4 font-bold">Min. Resell Price</th>
                 <th className="px-6 py-4 font-bold w-48">Your Selling Price</th>
@@ -146,7 +175,19 @@ export default function AgentBundles() {
 
                   return (
                     <tr key={bundle.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-900">{bundle.name}</td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-900 text-sm">{bundle.name}</p>
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          bundle.network === 'MTN' ? 'bg-amber-100 text-amber-700' :
+                          bundle.network === 'Vodafone' || bundle.network === 'Telecel' ? 'bg-rose-100 text-rose-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>{bundle.network}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full text-xs font-bold">
+                          📶 {bundle.size_gb} GB
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-slate-500">{formatCurrency(bundle.base_cost)}</td>
                       <td className="px-6 py-4 text-slate-500">{formatCurrency(bundle.min_resell)}</td>
                       <td className="px-6 py-4">
@@ -210,6 +251,16 @@ export default function AgentBundles() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-bold text-slate-900 text-base">{bundle.name}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                          📶 {bundle.size_gb} GB
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          bundle.network === 'MTN' ? 'bg-amber-100 text-amber-700' :
+                          bundle.network === 'Vodafone' || bundle.network === 'Telecel' ? 'bg-rose-100 text-rose-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>{bundle.network}</span>
+                      </div>
                     </div>
                     {margin >= 0 ? (
                       <span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-xs font-bold">

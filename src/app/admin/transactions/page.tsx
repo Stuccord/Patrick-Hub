@@ -5,8 +5,39 @@ import { Search, Filter, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { formatCurrency } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase";
 
+interface Transaction {
+  id: string;
+  type: string;
+  agent: string;
+  details: string;
+  amount: number;
+  fee: number;
+  date: string;
+}
+
+interface DBOrder {
+  id: string;
+  reference?: string | null;
+  customer_phone: string;
+  customer_paid: string | number;
+  platform_fee: string | number;
+  created_at: string;
+  users?: { name: string } | null;
+  bundles?: { name: string } | null;
+}
+
+interface DBWithdrawal {
+  id: string;
+  amount_requested: string | number;
+  payout_amount: string | number;
+  momo_number: string;
+  network: string;
+  created_at: string;
+  users?: { name: string } | null;
+}
+
 export default function AdminTransactions() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const fetchTransactions = async () => {
@@ -30,7 +61,7 @@ export default function AdminTransactions() {
       if (withdrawalsError) throw withdrawalsError;
 
       // 3. Map orders
-      const mappedOrders = (orders || []).map((o: any) => ({
+      const mappedOrders = ((orders || []) as unknown as DBOrder[]).map((o) => ({
         id: o.reference || `ORD-${o.id.substring(0, 8)}`,
         type: 'sale',
         agent: o.users?.name || 'Direct / Platform',
@@ -41,7 +72,7 @@ export default function AdminTransactions() {
       }));
 
       // 4. Map withdrawals
-      const mappedWithdrawals = (withdrawals || []).map((w: any) => {
+      const mappedWithdrawals = ((withdrawals || []) as unknown as DBWithdrawal[]).map((w) => {
         const fee = Number(w.amount_requested) - Number(w.payout_amount);
         return {
           id: `WD-${w.id.substring(0, 8)}`,
@@ -60,13 +91,15 @@ export default function AdminTransactions() {
       });
 
       setTransactions(allTxns);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error fetching transactions:", err);
-      alert(`Error fetching transactions: ${err.message || err.details || err.toString()}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(`Error fetching transactions: ${errorMessage}`);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTransactions();
   }, []);
 

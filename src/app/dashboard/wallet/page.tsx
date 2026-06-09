@@ -8,13 +8,38 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { format } from "date-fns";
 
+interface WalletTransaction {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number | string;
+  description: string;
+  created_at: string;
+}
+
+interface WithdrawalRequest {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  amount_requested: number | string;
+  network: string;
+  momo_number: string;
+  created_at: string;
+  payout_amount: number | string;
+}
+
+interface ReferenceBundle {
+  id: string;
+  name: string;
+  network: string;
+  size_gb: number;
+  base_price: number;
+}
+
 export default function AgentWallet() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [commissionRate, setCommissionRate] = useState(5);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [txnHistory, setTxnHistory] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
+  const [txnHistory, setTxnHistory] = useState<WalletTransaction[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [bundles, setBundles] = useState<ReferenceBundle[]>([]);
   const [amount, setAmount] = useState("");
   const [network, setNetwork] = useState("MTN");
   const [phone, setPhone] = useState("");
@@ -64,7 +89,7 @@ export default function AgentWallet() {
         .order('created_at', { ascending: false });
         
       if (txns) {
-        setTxnHistory(txns);
+        setTxnHistory(txns as unknown as WalletTransaction[]);
       }
 
       // Fetch withdrawal requests
@@ -75,7 +100,25 @@ export default function AgentWallet() {
         .order('created_at', { ascending: false });
 
       if (withdrawals) {
-        setWithdrawalRequests(withdrawals);
+        setWithdrawalRequests(withdrawals as unknown as WithdrawalRequest[]);
+      }
+
+      // Fetch active bundles for price reference
+      const { data: activeBundles } = await supabase
+        .from('bundles')
+        .select('id, name, network, size_gb, base_price')
+        .eq('is_active', true)
+        .order('network', { ascending: true })
+        .order('size_gb', { ascending: true });
+
+      if (activeBundles) {
+        setBundles(activeBundles.map(b => ({
+          id: b.id,
+          name: b.name,
+          network: b.network,
+          size_gb: Number(b.size_gb),
+          base_price: Number(b.base_price)
+        })));
       }
     } catch (err) {
       console.error("Error fetching wallet data:", err);
@@ -252,6 +295,47 @@ export default function AgentWallet() {
                   className="w-full px-4 h-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none font-bold text-slate-900 bg-white"
                 />
               </div>
+
+              {bundles.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <label className="text-xs font-bold text-slate-500 block">Or select a bundle cost to auto-fill:</label>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {bundles.map((bundle) => (
+                      <button
+                        key={bundle.id}
+                        type="button"
+                        onClick={() => setTopupAmount(bundle.base_price.toString())}
+                        className={`p-2 border text-left rounded-xl hover:border-brand-primary hover:bg-brand-light/10 transition-all cursor-pointer group flex flex-col justify-between ${
+                          parseFloat(topupAmount) === bundle.base_price
+                            ? "border-brand-primary bg-brand-light/20 ring-2 ring-brand-primary/25"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start w-full">
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold ${
+                            bundle.network === 'MTN' ? 'bg-amber-100 text-amber-700' :
+                            bundle.network === 'Vodafone' || bundle.network === 'Telecel' ? 'bg-rose-100 text-rose-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {bundle.network}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {bundle.size_gb} GB
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between items-baseline w-full">
+                          <span className="text-[9px] text-slate-400 font-medium truncate group-hover:text-slate-600 max-w-[50px]">
+                            {bundle.name}
+                          </span>
+                          <span className="text-[11px] font-extrabold text-slate-900 shrink-0">
+                            {formatCurrency(bundle.base_price)}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <button 
                 type="submit"

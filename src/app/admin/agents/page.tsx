@@ -2,19 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Search, Filter, Store, Trash2, Mail, Phone as PhoneIcon } from "lucide-react";
-import { formatCurrency } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase";
 import { sendAgentApprovalNotification } from "@/lib/emails";
 
-export default function AdminAgents() {
-  const [agents, setAgents] = useState<any[]>([]);
+interface AgentUser {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  username: string;
+  status: string;
+  wallets?: { balance: string | number } | { balance: string | number }[];
+}
 
-  function getAgentBalance(agent: any): number {
+export default function AdminAgents() {
+  const [agents, setAgents] = useState<AgentUser[]>([]);
+
+  function getAgentBalance(agent: AgentUser): number {
     if (!agent.wallets) return 0;
     if (Array.isArray(agent.wallets)) {
-      return Number(agent.wallets[0]?.balance) || 0;
+      return Number((agent.wallets[0] as { balance: string | number })?.balance) || 0;
     }
-    return Number(agent.wallets.balance) || 0;
+    return Number((agent.wallets as { balance: string | number }).balance) || 0;
   }
 
   const fetchAgents = async () => {
@@ -33,6 +42,7 @@ export default function AdminAgents() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAgents();
   }, []);
 

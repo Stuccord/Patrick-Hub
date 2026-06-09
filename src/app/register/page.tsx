@@ -104,9 +104,9 @@ export default function RegisterPage() {
       await sendAgentSignupNotification(formData.name, formData.email);
 
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "An error occurred during registration");
+      setError(err instanceof Error ? err.message : "An error occurred during registration");
     } finally {
       setLoading(false);
     }

@@ -21,8 +21,28 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { format } from "date-fns";
 
+interface AgentData {
+  name: string;
+  username: string;
+  wallet: number;
+  status: string;
+  store_url: string;
+}
+
+interface Order {
+  id: string;
+  reference: string;
+  created_at: string;
+  customer_phone: string;
+  customer_paid: number;
+  platform_fee: number;
+  agent_credited: number;
+  status: string;
+  bundles?: { name: string } | null;
+}
+
 export default function AgentDashboard() {
-  const [agent, setAgent] = useState<any>({
+  const [agent, setAgent] = useState<AgentData>({
     name: "Reseller",
     username: "",
     wallet: 0.00,
@@ -35,7 +55,7 @@ export default function AgentDashboard() {
     totalProfit: 0.00,
     monthlyProfit: 0.00
   });
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
   const [host, setHost] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -43,6 +63,7 @@ export default function AgentDashboard() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHost(window.location.host);
     }
   }, []);
@@ -111,7 +132,15 @@ export default function AgentDashboard() {
         .order('created_at', { ascending: false })
         .limit(5);
 
-      setRecentOrders(recent || []);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mappedRecent = (recent || []).map((o: any) => ({
+        ...o,
+        customer_paid: Number(o.customer_paid),
+        platform_fee: Number(o.platform_fee),
+        agent_credited: Number(o.agent_credited)
+      }));
+
+      setRecentOrders(mappedRecent as unknown as Order[]);
 
       // 8. Fetch pending withdrawals count
       const { count: pendingW } = await supabase
@@ -147,6 +176,7 @@ export default function AgentDashboard() {
 
   useEffect(() => {
     if (host) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchData();
       const interval = setInterval(() => fetchData(true), 30000);
       return () => clearInterval(interval);

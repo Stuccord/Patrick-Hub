@@ -17,15 +17,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
+interface NotificationTx {
+  id: string;
+  type: string;
+  amount: number | string;
+  description: string;
+  created_at: string;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [userInitials, setUserInitials] = useState("A");
-  const [userName, setUserName] = useState("Agent");
   const [userLogo, setUserLogo] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationTx[]>([]);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
@@ -42,7 +49,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           
           if (profile?.logo_url) setUserLogo(profile.logo_url);
           if (profile?.name) {
-            setUserName(profile.name);
             const parts = profile.name.trim().split(/\s+/);
             const initials = parts.map((p: string) => p.charAt(0)).join("").substring(0, 2).toUpperCase();
             setUserInitials(initials || "A");
@@ -100,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="w-8 h-8 bg-brand-primary rounded-lg flex items-center justify-center text-white font-bold text-xs">
               PI
             </div>
-            <span className="text-xl font-bold text-slate-900">Patrick's Info Tech</span>
+            <span className="text-xl font-bold text-slate-900">Patrick&apos;s Info Tech</span>
           </Link>
         </div>
         
@@ -167,6 +173,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Globe className="h-5 w-5" />
             Back to Homepage
           </Link>
+          <a 
+            href="https://wa.me/233276915317"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-green-600 hover:bg-green-50 font-bold"
+          >
+            <span className="h-5 w-5 flex items-center justify-center shrink-0">💬</span>
+            WhatsApp Help
+          </a>
         </nav>
 
         <div className="p-4 border-t border-slate-100">
@@ -229,6 +244,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               <Link href="/dashboard/store-settings" className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 hover:ring-2 hover:ring-brand-primary hover:ring-offset-2 transition-all overflow-hidden">
                 {userLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={userLogo} alt="Profile Logo" className="w-full h-full object-cover" />
                 ) : (
                   userInitials
@@ -319,11 +335,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link 
                 href="/" 
                 onClick={() => setShowMoreMenu(false)}
-                className="flex items-center gap-4 p-4 hover:bg-slate-50 rounded-xl transition-all font-bold text-slate-700 min-h-[48px]"
+                className="flex items-center gap-4 p-4 hover:bg-slate-50 text-slate-700 rounded-xl transition-all font-bold min-h-[48px] text-left"
               >
                 <Globe className="h-5 w-5 text-slate-400 shrink-0" />
                 Back to Homepage
               </Link>
+              <a 
+                href="https://wa.me/233276915317" 
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowMoreMenu(false)}
+                className="flex items-center gap-4 p-4 hover:bg-green-50 text-green-600 rounded-xl transition-all font-bold min-h-[48px] text-left"
+              >
+                <span className="h-5 w-5 flex items-center justify-center shrink-0">💬</span>
+                WhatsApp Support
+              </a>
               <hr className="border-slate-100 my-2" />
               <button 
                 onClick={(e) => {

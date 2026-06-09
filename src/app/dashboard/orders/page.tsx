@@ -6,8 +6,20 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { format } from "date-fns";
 
+interface Order {
+  id: string;
+  reference: string;
+  created_at: string;
+  customer_phone: string;
+  customer_paid: number;
+  platform_fee: number;
+  agent_credited: number;
+  status: string;
+  bundles?: { name: string } | null;
+}
+
 export default function AgentOrders() {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -26,7 +38,16 @@ export default function AgentOrders() {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        setOrders(data || []);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped = (data || []).map((o: any) => ({
+          ...o,
+          customer_paid: Number(o.customer_paid),
+          platform_fee: Number(o.platform_fee),
+          agent_credited: Number(o.agent_credited)
+        }));
+
+        setOrders(mapped as unknown as Order[]);
       } catch (err) {
         console.error("Error fetching orders:", err);
       } finally {

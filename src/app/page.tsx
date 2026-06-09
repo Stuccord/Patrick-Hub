@@ -8,9 +8,6 @@ import {
   TrendingUp, 
   Menu, 
   X, 
-  ShoppingBag, 
-  Users, 
-  LineChart,
   Check,
   ChevronDown,
   Globe,
@@ -45,19 +42,29 @@ const AirtelTigoLogo = ({ size = "w-9 h-9" }: { size?: string }) => (
   </svg>
 );
 
+interface Bundle {
+  id: string;
+  name: string;
+  network: string;
+  size_gb: number;
+  min_resell_price: number;
+  base_price: number;
+  is_active: boolean;
+}
+
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   
   // High-energy simulated sales dashboard interactions
-  const [salesCount, setSalesCount] = useState(248);
+  const [, setSalesCount] = useState(248);
   const [earnedToday, setEarnedToday] = useState(475);
   const [recentSale, setRecentSale] = useState<{name: string, plan: string, profit: string} | null>(null);
   
   const [userRole, setUserRole] = useState<string | null>(null);
 
   // Hero Buy Data Form State
-  const [bundles, setBundles] = useState<any[]>([]);
+  const [bundles, setBundles] = useState<Bundle[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState("MTN");
   const [selectedBundleId, setSelectedBundleId] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
@@ -75,8 +82,8 @@ export default function LandingPage() {
           .order('network', { ascending: true })
           .order('size_gb', { ascending: true });
         if (data) {
-          setBundles(data);
-          const mtnBundles = data.filter((b: any) => b.network === "MTN");
+          setBundles(data as Bundle[]);
+          const mtnBundles = (data as Bundle[]).filter((b) => b.network === "MTN");
           if (mtnBundles.length > 0) {
             setSelectedBundleId(mtnBundles[0].id);
           }
@@ -90,7 +97,7 @@ export default function LandingPage() {
 
   const handleNetworkChange = (net: string) => {
     setSelectedNetwork(net);
-    const filtered = bundles.filter((b: any) => b.network === net);
+    const filtered = bundles.filter((b) => b.network === net);
     if (filtered.length > 0) {
       setSelectedBundleId(filtered[0].id);
     } else {
@@ -102,7 +109,7 @@ export default function LandingPage() {
     e.preventDefault();
     if (!selectedBundleId || recipientPhone.length < 10) return;
     
-    const selectedBundle = bundles.find((b: any) => b.id === selectedBundleId);
+    const selectedBundle = bundles.find((b) => b.id === selectedBundleId);
     if (!selectedBundle) return;
 
     setIsRedirecting(true);
@@ -125,7 +132,7 @@ export default function LandingPage() {
             setUserRole("admin");
           }
         }
-      } catch (e) {}
+      } catch {}
     };
     checkUser();
 
@@ -193,7 +200,7 @@ export default function LandingPage() {
               P
             </div>
             <span className="text-xl font-extrabold text-white tracking-tight flex items-center">
-              Patrick's Info Tech<span className="text-[#16A34A] text-2xl leading-none">.</span>
+              Patrick&apos;s Info Tech<span className="text-[#16A34A] text-2xl leading-none">.</span>
             </span>
           </div>
 
@@ -423,7 +430,7 @@ export default function LandingPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4ADE80] opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4ADE80]"></span>
                 </span>
-                Ghana's #1 Reseller Platform
+                Ghana&apos;s #1 Reseller Platform
               </div>
 
               {/* Heading (2 lines, font-weight 800, clamp size, leading 1.1) */}
@@ -436,7 +443,7 @@ export default function LandingPage() {
 
               {/* Subtext */}
               <p className="text-white/80 text-base md:text-lg leading-relaxed max-w-[540px] font-medium">
-                Empower your business with Ghana's ultimate data reselling software. Instantly deploy your own branded web store, sell high-demand data bundles at wholesale rates, and enjoy direct automatic payouts.
+                Empower your business with Ghana&apos;s ultimate data reselling software. Instantly deploy your own branded web store, sell high-demand data bundles at wholesale rates, and enjoy direct automatic payouts.
               </p>
 
               {/* CTA Buttons Row */}
@@ -567,12 +574,12 @@ export default function LandingPage() {
                       onChange={(e) => setSelectedBundleId(e.target.value)}
                       className="w-full h-12 px-4 border-2 border-slate-200 rounded-xl font-bold text-slate-800 text-sm bg-white outline-none focus:border-[#16A34A] transition-colors"
                     >
-                      {bundles.filter((b: any) => b.network === selectedNetwork).length === 0 && (
+                      {bundles.filter((b) => b.network === selectedNetwork).length === 0 && (
                         <option value="">No bundles available</option>
                       )}
                       {bundles
-                        .filter((b: any) => b.network === selectedNetwork)
-                        .map((b: any) => (
+                        .filter((b) => b.network === selectedNetwork)
+                        .map((b) => (
                           <option key={b.id} value={b.id}>
                             {b.name} — GH₵ {Number(b.min_resell_price).toFixed(2)}
                           </option>
@@ -598,7 +605,7 @@ export default function LandingPage() {
 
                   {/* Selected bundle price preview */}
                   {selectedBundleId && (() => {
-                    const sel = bundles.find((b: any) => b.id === selectedBundleId);
+                    const sel = bundles.find((b) => b.id === selectedBundleId);
                     if (!sel) return null;
                     const networkColor =
                       selectedNetwork === "MTN" ? "text-amber-700 bg-amber-50 border-amber-200" :
@@ -651,7 +658,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center space-y-4 max-w-2xl mx-auto mb-16">
-            <span className="text-[#16A34A] text-[11px] font-black tracking-widest uppercase block">Why Choose Patrick's Info Tech?</span>
+            <span className="text-[#16A34A] text-[11px] font-black tracking-widest uppercase block">Why Choose Patrick&apos;s Info Tech?</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0F172A] tracking-tight">
               Everything you need to launch a profitable business
             </h2>
@@ -665,6 +672,7 @@ export default function LandingPage() {
             
             {/* Card 1: Your Own Brand */}
             <div className="bg-slate-50 border border-slate-100 rounded-3xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:border-[#16A34A]/30 hover:bg-white hover:shadow-[0_16px_40px_rgba(0,0,0,0.03)] group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400" 
                 alt="Your Own Store" 
@@ -682,6 +690,7 @@ export default function LandingPage() {
 
             {/* Card 2: Automated Payouts */}
             <div className="bg-slate-50 border border-slate-100 rounded-3xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:border-[#16A34A]/30 hover:bg-white hover:shadow-[0_16px_40px_rgba(0,0,0,0.03)] group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400" 
                 alt="Set Your Own Prices" 
@@ -699,6 +708,7 @@ export default function LandingPage() {
 
             {/* Card 3: Best Wholesale Rates */}
             <div className="bg-slate-50 border border-slate-100 rounded-3xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:border-[#16A34A]/30 hover:bg-white hover:shadow-[0_16px_40px_rgba(0,0,0,0.03)] group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=400" 
                 alt="Instant Commissions" 
@@ -723,7 +733,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           
           <div className="text-center space-y-4 mb-10">
-            <h2 className="text-[28px] font-bold text-[#0F172A]">See How Patrick's Info Tech Works</h2>
+            <h2 className="text-[28px] font-bold text-[#0F172A]">See How Patrick&apos;s Info Tech Works</h2>
             <p className="text-[15px] text-[#64748B] max-w-xl mx-auto leading-relaxed">
               Watch how easy it is to set up your store and start earning in minutes.
             </p>
@@ -877,6 +887,7 @@ export default function LandingPage() {
             <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src="https://i.pravatar.cc/60?img=11" 
                     alt="Ama Serwaa" 
@@ -889,7 +900,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-sm text-[#F59E0B] mb-3">★★★★★</div>
                 <p className="text-[14px] text-[#475569] leading-relaxed italic font-medium">
-                  "I started earning from day one. My customers love how easy it is to buy data from my store link."
+                  &ldquo;I started earning from day one. My customers love how easy it is to buy data from my store link.&rdquo;
                 </p>
               </div>
             </div>
@@ -898,6 +909,7 @@ export default function LandingPage() {
             <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src="https://i.pravatar.cc/60?img=33" 
                     alt="Kwame Mensah" 
@@ -910,7 +922,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-sm text-[#F59E0B] mb-3">★★★★★</div>
                 <p className="text-[14px] text-[#475569] leading-relaxed italic font-medium">
-                  "Patrick's Info Tech changed my hustle completely. I now have 50+ regular customers buying data through my link every week."
+                  &ldquo;Patrick&apos;s Info Tech changed my hustle completely. I now have 50+ regular customers buying data through my link every week.&rdquo;
                 </p>
               </div>
             </div>
@@ -919,6 +931,7 @@ export default function LandingPage() {
             <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src="https://i.pravatar.cc/60?img=45" 
                     alt="Abena Osei" 
@@ -931,7 +944,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-sm text-[#F59E0B] mb-3">★★★★★</div>
                 <p className="text-[14px] text-[#475569] leading-relaxed italic font-medium">
-                  "The withdrawal system is seamless. Money goes straight to my MoMo. I recommend Patrick's Info Tech to every data seller."
+                  &ldquo;The withdrawal system is seamless. Money goes straight to my MoMo. I recommend Patrick&apos;s Info Tech to every data seller.&rdquo;
                 </p>
               </div>
             </div>
@@ -980,10 +993,10 @@ export default function LandingPage() {
                 <div className="w-8 h-8 bg-[#16A34A] rounded-lg flex items-center justify-center text-white font-black text-xs shadow-md shadow-[#16A34A]/10">
                   PI
                 </div>
-                <span className="text-lg font-extrabold text-white tracking-tight">Patrick's Info Tech.</span>
+                <span className="text-lg font-extrabold text-white tracking-tight">Patrick&apos;s Info Tech.</span>
               </div>
               <p className="text-[13.5px] leading-relaxed max-w-sm text-slate-400 font-medium">
-                Ghana's ultimate data reselling software platform. We enable micro-entrepreneurs and agencies to instantly build branded stores, sell major network bundles, and grow their businesses automatically.
+                Ghana&apos;s ultimate data reselling software platform. We enable micro-entrepreneurs and agencies to instantly build branded stores, sell major network bundles, and grow their businesses automatically.
               </p>
             </div>
 
@@ -993,7 +1006,7 @@ export default function LandingPage() {
               <div className="flex flex-col gap-3 text-sm font-semibold">
                 <a href="#features" className="hover:text-white transition-colors duration-200">Features</a>
                 <a href="#how-it-works" className="hover:text-white transition-colors duration-200">How it Works</a>
-                <a href="/store/test-agent" className="hover:text-white transition-colors duration-200">Live Demo Store</a>
+                <Link href="/store/test-agent" className="hover:text-white transition-colors duration-200">Live Demo Store</Link>
               </div>
             </div>
 
@@ -1022,7 +1035,7 @@ export default function LandingPage() {
           {/* Bottom Divider & Copyright */}
           <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-              © 2025 Patrick's Info Tech. All rights reserved.
+              &copy; 2025 Patrick&apos;s Info Tech. All rights reserved.
             </p>
             <p className="text-xs text-slate-600 font-medium">
               Made with 💚 for Ghanaian Entrepreneurs
@@ -1031,6 +1044,22 @@ export default function LandingPage() {
 
         </div>
       </footer>
+
+      {/* Floating WhatsApp Support */}
+      <a
+        href="https://wa.me/233276915317"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 bg-[#25D366] hover:bg-[#128C7E] text-white p-3.5 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center group hover:pr-5 cursor-pointer"
+        title="WhatsApp Support"
+      >
+        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current shrink-0">
+          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.413 9.863-9.83.002-2.623-1.023-5.086-2.884-6.95C16.59 1.96 14.135.938 11.517.938c-5.44 0-9.866 4.414-9.87 9.831-.001 1.83.497 3.619 1.443 5.206L1.996 21.8l6.02-1.579c.001 0-.001 0 0 0zM17.472 14.382c-.3-.149-1.778-.878-2.046-.976-.267-.099-.463-.149-.658.149-.195.298-.754.943-.925 1.141-.17.199-.341.224-.641.075-1.04-.522-1.837-.922-2.585-2.203-.199-.343.199-.319.571-1.066.075-.15.037-.282-.018-.382-.056-.1-.506-1.22-.693-1.67-.182-.439-.367-.38-.507-.387-.13-.007-.28-.007-.43-.007-.15 0-.395.056-.602.282-.207.224-.791.774-.791 1.888 0 1.114.81 2.19.922 2.342.113.15 1.59 2.43 3.851 3.407.537.232 1.056.37 1.417.485.54.171 1.03.147 1.42.089.431-.064 1.325-.542 1.512-1.038.188-.495.188-.919.132-1.008-.056-.089-.207-.14-.507-.29z" />
+        </svg>
+        <span className="max-w-0 overflow-hidden group-hover:max-w-[120px] transition-all duration-300 ease-out whitespace-nowrap text-xs font-black pl-0 group-hover:pl-2">
+          WhatsApp Support
+        </span>
+      </a>
 
     </div>
   );
