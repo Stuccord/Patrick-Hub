@@ -42,7 +42,9 @@ CREATE TABLE bundles (
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
--- For existing databases, run: ALTER TABLE bundles ADD COLUMN IF NOT EXISTS cheapgigz_id TEXT;
+-- For existing databases, run: 
+-- ALTER TABLE bundles ADD COLUMN IF NOT EXISTS cheapgigz_id TEXT;
+-- UPDATE bundles SET cheapgigz_id = NULL WHERE cheapgigz_id ~ '^[0-9]+$';
 
 -- Agent Bundles (Prices set by agents)
 CREATE TABLE agent_bundles (

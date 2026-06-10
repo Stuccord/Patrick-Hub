@@ -86,6 +86,7 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [platformFee, setPlatformFee] = useState(0.20);
+  const [isAgent, setIsAgent] = useState(false);
 
   // Flow State: 1 = Select Bundle, 2 = Recipient Info, 3 = Summary, 4 = MoMo Payment, 5 = Success
   const [step, setStep] = useState(1);
@@ -96,16 +97,26 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [reference, setReference] = useState("");
 
+  const getBundlePrice = (b: Bundle) => {
+    return isAgent ? b.base_cost : b.agent_price;
+  };
+
   useEffect(() => {
     async function fetchData() {
       const supabase = createClient();
       
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, store_name, store_description, name, username')
-        .eq('username', slug)
-        .eq('status', 'active')
-        .single();
+      const [userProfileRes, authUserRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, store_name, store_description, name, username')
+          .eq('username', slug)
+          .eq('status', 'active')
+          .single(),
+        supabase.auth.getUser()
+      ]);
+
+      const userData = userProfileRes.data;
+      const authUser = authUserRes.data?.user;
 
       if (userData) {
         setAgent({
@@ -114,6 +125,8 @@ export default function StoreClient({ slug }: { slug: string }) {
           username: userData.username,
           tagline: userData.store_description || "Affordable data packages, sent instantly."
         });
+
+        setIsAgent(!!(authUser && authUser.id === userData.id));
 
         const { data: bundlesData } = await supabase.from('bundles').select('*').eq('is_active', true);
         const { data: agentBundlesData } = await supabase.from('agent_bundles').select('*').eq('agent_id', userData.id);
@@ -163,7 +176,8 @@ export default function StoreClient({ slug }: { slug: string }) {
     
     setIsLoading(true);
     const dummyEmail = `${phone.replace(/\s+/g, '')}@patricks-info-tech.com`;
-    const amountInPesewas = Math.round((selectedBundle.agent_price + platformFee) * 100);
+    const activePrice = getBundlePrice(selectedBundle);
+    const amountInPesewas = Math.round((activePrice + platformFee) * 100);
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,8 +205,9 @@ export default function StoreClient({ slug }: { slug: string }) {
           bundle_id: selectedBundle.id,
           customer_phone: phone,
           customer_network: network,
-          customer_paid: (selectedBundle.agent_price + platformFee).toString(),
-          platform_fee: platformFee.toString()
+          customer_paid: (activePrice + platformFee).toString(),
+          platform_fee: platformFee.toString(),
+          is_agent_purchase: isAgent ? "true" : "false"
         },
         onSuccess: (transaction: { reference: string }) => {
           setReference(transaction.reference);
@@ -234,6 +249,13 @@ export default function StoreClient({ slug }: { slug: string }) {
       {/* Main Container */}
       <main className="flex-1 max-w-md w-full mx-auto px-4 py-6 flex flex-col justify-start">
         
+        {isAgent && step < 5 && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 mb-4 text-xs text-green-800 font-bold flex items-center gap-2 shadow-sm">
+            <span>🛡️</span>
+            <span>You are logged in as the store owner. You are purchasing at <strong>wholesale cost (base price)</strong>. No profit margin will be credited.</span>
+          </div>
+        )}
+
         {/* Step Indicator (e.g. Step 1 of 4) */}
         {step < 5 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm flex items-center justify-between">
@@ -292,7 +314,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                       </div>
                       <div className="text-right">
                         <div className={`text-xl font-black ${styles.priceColor}`}>
-                          {formatCurrency(bundle.agent_price)}
+                          {formatCurrency(getBundlePrice(bundle))}
                         </div>
                         <p className="text-[9px] text-slate-400 font-extrabold uppercase">Plus GHS {platformFee.toFixed(2)} Fee</p>
                       </div>
@@ -335,7 +357,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">You&apos;re buying</p>
                     <p className="font-black text-slate-900 text-sm leading-tight truncate">{selectedBundle.name}</p>
-                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(selectedBundle.agent_price)} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
+                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(getBundlePrice(selectedBundle))} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
                   </div>
                   <button
                     onClick={() => setStep(1)}
@@ -436,7 +458,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">You&apos;re buying</p>
                     <p className="font-black text-slate-900 text-sm leading-tight truncate">{selectedBundle.name}</p>
-                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(selectedBundle.agent_price)} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
+                    <p className={`text-xs font-bold ${styles.priceColor}`}>{formatCurrency(getBundlePrice(selectedBundle))} <span className="text-slate-400 font-medium">+ GHS {platformFee.toFixed(2)} fee</span></p>
                   </div>
                 </div>
               );
@@ -466,7 +488,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Price:</span>
-                  <span>{formatCurrency(selectedBundle.agent_price)}</span>
+                  <span>{formatCurrency(getBundlePrice(selectedBundle))}</span>
                 </div>
                 <div className="flex justify-between text-slate-500 pb-2.5">
                   <span>Platform Fee:</span>
@@ -475,7 +497,7 @@ export default function StoreClient({ slug }: { slug: string }) {
                 <div className="border-t-2 border-dotted border-slate-300 pt-3 flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-900">Total Payable:</span>
                   <span className="font-black text-brand-primary text-xl">
-                    {formatCurrency(selectedBundle.agent_price + platformFee)}
+                    {formatCurrency(getBundlePrice(selectedBundle) + platformFee)}
                   </span>
                 </div>
               </div>

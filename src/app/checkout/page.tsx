@@ -35,11 +35,12 @@ function CheckoutContent() {
   const [phone, setPhone] = useState(searchParams.get("phone") || "");
   const [network, setNetwork] = useState('');
   const [fallbackRef, setFallbackRef] = useState("");
+  const [isAgent, setIsAgent] = useState(false);
+  const [activePrice, setActivePrice] = useState(parseFloat(searchParams.get("price") || "5.00"));
 
   // Get data from URL
   const bundleName = searchParams.get("bundle") || "Data Bundle";
-  const agentPrice = parseFloat(searchParams.get("price") || "5.00");
-  const totalPrice = agentPrice + platformFee;
+  const totalPrice = activePrice + platformFee;
 
   const detectNetwork = (phoneNumber: string): string => {
     const cleaned = phoneNumber.replace(/\D/g, '');
@@ -100,6 +101,35 @@ function CheckoutContent() {
           }
         }
         setBundleId(resolvedBundleId);
+
+        // Check if currently logged in user is the agent
+        const { data: { user } } = await supabase.auth.getUser();
+        const loggedInIsAgent = user && user.id === resolvedAgentId;
+        setIsAgent(!!loggedInIsAgent);
+
+        let finalPrice = parseFloat(searchParams.get("price") || "5.00");
+        if (resolvedBundleId) {
+          const { data: bundleData } = await supabase
+            .from('bundles')
+            .select('base_price, min_resell_price')
+            .eq('id', resolvedBundleId)
+            .maybeSingle();
+          if (bundleData) {
+            if (loggedInIsAgent) {
+              finalPrice = Number(bundleData.base_price);
+            } else {
+              // Custom agent override pricing if they are buying as a customer
+              const { data: override } = await supabase
+                .from('agent_bundles')
+                .select('selling_price')
+                .eq('agent_id', resolvedAgentId)
+                .eq('bundle_id', resolvedBundleId)
+                .maybeSingle();
+              finalPrice = override ? Number(override.selling_price) : Number(bundleData.min_resell_price);
+            }
+          }
+        }
+        setActivePrice(finalPrice);
       } catch (err) {
         console.error("Error loading payment db details:", err);
       }
@@ -132,7 +162,8 @@ function CheckoutContent() {
           bundle_id: bundleId,
           customer_phone: phone,
           customer_paid: totalPrice.toString(),
-          platform_fee: platformFee.toString()
+          platform_fee: platformFee.toString(),
+          is_agent_purchase: isAgent ? "true" : "false"
         },
         onSuccess: (transaction: PaystackTransaction) => {
           setReference(transaction.reference);
@@ -209,6 +240,13 @@ function CheckoutContent() {
           <ArrowLeft className="h-4 w-4" /> Back to Store
         </button>
 
+        {isAgent && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 text-xs text-green-800 font-bold flex items-center gap-2 shadow-sm">
+            <span>🛡️</span>
+            <span>You are logged in as the store owner. You are purchasing at <strong>wholesale cost (base price)</strong>. No profit margin will be credited.</span>
+          </div>
+        )}
+
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl shadow-slate-200/50 border border-slate-100">
 
           {/* Dark header — shows what's being bought */}
@@ -243,7 +281,7 @@ function CheckoutContent() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500 font-medium">Bundle price</span>
-                <span className="text-slate-900 font-bold">{formatCurrency(agentPrice)}</span>
+                <span className="text-slate-900 font-bold">{formatCurrency(activePrice)}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500 font-medium">Platform fee</span>

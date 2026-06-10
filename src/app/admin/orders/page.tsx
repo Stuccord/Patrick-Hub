@@ -80,7 +80,16 @@ export default function AdminOrders() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(`Error: ${data.error ?? 'Unknown error'}`);
+        const errorMsg: string = data.error ?? 'Unknown error';
+        // If DB says order is already in a terminal state, the UI was stale.
+        // Refresh silently so the action buttons disappear and status is correct.
+        if (/already (completed|failed)/i.test(errorMsg)) {
+          await fetchOrders();
+        } else {
+          alert(`Error: ${errorMsg}`);
+          // Still refresh so any partial state changes are reflected
+          await fetchOrders();
+        }
       } else {
         await fetchOrders();
       }
@@ -295,7 +304,7 @@ export default function AdminOrders() {
                               onClick={() => handleOrderAction(order.id, 'deliver')}
                               disabled={actionLoading[order.id]}
                               className="flex items-center gap-1 h-7 px-2.5 bg-[#16A34A] hover:bg-[#15803D] text-white rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                              title="Deliver via Cheap Gigz"
+                              title="Deliver via DataHustle"
                             >
                               <Truck className="w-3 h-3" />
                               {actionLoading[order.id] ? '...' : 'Deliver'}

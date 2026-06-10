@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendAgentSaleNotification, sendAgentTopupNotification } from '@/lib/emails';
-import { placeGigzHubOrder } from '@/lib/gigzhub';
+import { placeDataHustleOrder } from '@/lib/datahustle';
 
 // Webhook requires raw body for signature verification, but Next.js App Router exposes req.text()
 export async function POST(req: Request) {
@@ -127,7 +127,8 @@ export async function POST(req: Request) {
       const agentPrice = Number((customerPaid - platformFee).toFixed(2));
       
       // profit is agent price minus base cost
-      const agentCredited = Number((agentPrice - Number(bundleRes.data.base_price)).toFixed(2));
+      const isAgentPurchase = metadata.is_agent_purchase === true || metadata.is_agent_purchase === 'true';
+      const agentCredited = isAgentPurchase ? 0 : Number((agentPrice - Number(bundleRes.data.base_price)).toFixed(2));
 
       // 2. Create the order with status 'pending'
       const { error: orderError } = await supabase.from('orders').insert([{
@@ -144,12 +145,12 @@ export async function POST(req: Request) {
 
       if (orderError) throw orderError;
 
-      // 3. Attempt to automatically fulfill via GigzHub
-      const result = await placeGigzHubOrder(
+      // 3. Attempt to automatically fulfill via DataHustle
+      const result = await placeDataHustleOrder(
         metadata.customer_phone,
         bundleRes.data.network,
         Number(bundleRes.data.size_gb),
-        bundleRes.data.cheapgigz_id  // GigzHub network code override (e.g. 'MTNUP2U')
+        bundleRes.data.cheapgigz_id  // DataHustle capacity override (e.g. '1', '5')
       );
 
         if (result.success) {
@@ -160,38 +161,42 @@ export async function POST(req: Request) {
             .eq('reference', reference);
 
           // Credit agent wallet
-          const { data: wallet, error: walletError } = await supabase
-            .from('wallets')
-            .select('balance')
-            .eq('agent_id', metadata.agent_id)
-            .single();
-
-          if (!walletError && wallet) {
-            const newBalance = Number((Number(wallet.balance) + agentCredited).toFixed(2));
-            await supabase
+          if (agentCredited > 0) {
+            const { data: wallet, error: walletError } = await supabase
               .from('wallets')
-              .update({ balance: newBalance })
-              .eq('agent_id', metadata.agent_id);
+              .select('balance')
+              .eq('agent_id', metadata.agent_id)
+              .single();
 
-            await supabase.from('wallet_transactions').insert([{
-              agent_id: metadata.agent_id,
-              type: 'credit',
-              amount: agentCredited,
-              description: `Profit from sale: ${bundleRes.data.name} to ${metadata.customer_phone} (Ref: ${reference})`
-            }]);
+            if (!walletError && wallet) {
+              const newBalance = Number((Number(wallet.balance) + agentCredited).toFixed(2));
+              await supabase
+                .from('wallets')
+                .update({ balance: newBalance })
+                .eq('agent_id', metadata.agent_id);
+
+              await supabase.from('wallet_transactions').insert([{
+                agent_id: metadata.agent_id,
+                type: 'credit',
+                amount: agentCredited,
+                description: `Profit from sale: ${bundleRes.data.name} to ${metadata.customer_phone} (Ref: ${reference})`
+              }]);
+            }
           }
 
           // Send Email Notification
-          await sendAgentSaleNotification(
-            userRes.data.email,
-            userRes.data.name,
-            metadata.customer_phone,
-            bundleRes.data.name,
-            agentCredited
-          );
+          if (agentCredited > 0) {
+            await sendAgentSaleNotification(
+              userRes.data.email,
+              userRes.data.name,
+              metadata.customer_phone,
+              bundleRes.data.name,
+              agentCredited
+            );
+          }
         } else {
           // Auto-fulfillment failed — order stays pending for manual admin action
-          console.warn('[Webhook] GigzHub auto-fulfillment failed:', result.message);
+          console.warn('[Webhook] DataHustle auto-fulfillment failed:', result.message);
         }
 
       return NextResponse.json({ status: 'success' });

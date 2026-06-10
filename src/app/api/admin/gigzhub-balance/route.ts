@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getGigzHubBalance } from '@/lib/gigzhub';
+import { getDataHustleBalance } from '@/lib/datahustle';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
@@ -41,11 +41,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 2. Fetch the GigzHub API balance
-    const balanceResult = await getGigzHubBalance();
+    // 2. Fetch the DataHustle API balance
+    const balanceResult = await getDataHustleBalance();
     return NextResponse.json(balanceResult);
   } catch (err: unknown) {
-    console.error('[GigzHub Balance API] Error:', err);
+    console.error('[DataHustle Balance API] Error:', err);
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Internal Server Error' },
       { status: 500 }

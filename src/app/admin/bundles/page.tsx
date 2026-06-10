@@ -400,15 +400,15 @@ export default function AdminBundles() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-1.5">GigzHub Network Code Override</label>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-1.5">DataHustle Capacity Override</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. MTNUP2U, TELECEL, AT"
+                  placeholder="e.g. 1, 2, 5, 10"
                   value={capacityOverride}
                   onChange={(e) => setCapacityOverride(e.target.value)}
                   className="w-full h-10 px-3 bg-white border border-[#E5E7EB] rounded-lg text-[13px] text-[#374151] placeholder-[#9CA3AF] focus:border-[#16A34A] focus:outline-none transition-colors font-mono"
                 />
-                <p className="text-[10px] text-[#9CA3AF] mt-1">Optional. GigzHub network identifier for this bundle (e.g. MTNUP2U). Contact info@gigzhub.net for valid values. Leave empty to use auto-mapped value.</p>
+                <p className="text-[10px] text-[#9CA3AF] mt-1">Optional. DataHustle capacity override for this bundle (e.g. 1, 5, 10). Leave empty to use default size_gb.</p>
               </div>
 
               <div className="flex items-center gap-2 py-2">

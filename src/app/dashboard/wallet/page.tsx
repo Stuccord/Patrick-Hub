@@ -52,6 +52,10 @@ export default function AgentWallet() {
   const [topupAmount, setTopupAmount] = useState("");
   const [isTopupSubmitting, setIsTopupSubmitting] = useState(false);
   const [topupSuccess, setTopupSuccess] = useState(false);
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientNetwork, setRecipientNetwork] = useState("MTN");
+  const [selectedBundleId, setSelectedBundleId] = useState("");
+  const [platformFee, setPlatformFee] = useState(0.20);
 
   const fetchWalletData = async () => {
     try {
@@ -60,14 +64,24 @@ export default function AgentWallet() {
       if (!user) return;
 
       // Fetch config
-      const { data: configData } = await supabase
-        .from('platform_config')
-        .select('value')
-        .eq('key', 'withdrawal_commission')
-        .single();
+      const [commissionConfig, feeConfig] = await Promise.all([
+        supabase
+          .from('platform_config')
+          .select('value')
+          .eq('key', 'withdrawal_commission')
+          .single(),
+        supabase
+          .from('platform_config')
+          .select('value')
+          .eq('key', 'transaction_fee')
+          .maybeSingle()
+      ]);
       
-      if (configData) {
-        setCommissionRate(Number(configData.value) || 5);
+      if (commissionConfig.data) {
+        setCommissionRate(Number(commissionConfig.data.value) || 5);
+      }
+      if (feeConfig.data) {
+        setPlatformFee(Number(feeConfig.data.value) || 0.20);
       }
 
       // Fetch wallet balance
@@ -209,8 +223,28 @@ export default function AgentWallet() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const amountInPesewas = Math.round(amountVal * 100);
+      const isBundlePurchase = recipientPhone.trim().length >= 10 && selectedBundleId;
+      const chargeAmount = isBundlePurchase ? amountVal + platformFee : amountVal;
+      const amountInPesewas = Math.round(chargeAmount * 100);
       const email = user.email || `${user.id}@patricks-info-tech.com`;
+
+      const metadata = isBundlePurchase ? {
+        custom_fields: [
+          { display_name: "Customer Phone", variable_name: "customer_phone", value: recipientPhone },
+          { display_name: "Network", variable_name: "network", value: recipientNetwork }
+        ],
+        agent_id: user.id,
+        bundle_id: selectedBundleId,
+        customer_phone: recipientPhone,
+        customer_network: recipientNetwork,
+        customer_paid: chargeAmount.toString(),
+        platform_fee: platformFee.toString(),
+        is_agent_purchase: "true"
+      } : {
+        type: "agent_topup",
+        agent_id: user.id,
+        amount: amountVal.toString()
+      };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const PaystackPop = (await import('@paystack/inline-js')).default as any;
@@ -220,24 +254,26 @@ export default function AgentWallet() {
         email: email,
         amount: amountInPesewas,
         currency: "GHS",
-        metadata: {
-          type: "agent_topup",
-          agent_id: user.id,
-          amount: amountVal.toString()
-        },
+        metadata: metadata,
         onSuccess: () => {
-          setTopupSuccess(true);
+          if (isBundlePurchase) {
+            alert("Bundle purchase request submitted successfully!");
+          } else {
+            setTopupSuccess(true);
+            setTimeout(() => setTopupSuccess(false), 5000);
+          }
           setTopupAmount("");
+          setSelectedBundleId("");
+          setRecipientPhone("");
           setIsTopupSubmitting(false);
           fetchWalletData();
-          setTimeout(() => setTopupSuccess(false), 5000);
         },
         onCancel: () => {
           setIsTopupSubmitting(false);
         }
       });
     } catch (err) {
-      console.error("Error initiating Paystack top-up:", err);
+      console.error("Error initiating Paystack payment:", err);
       alert("Failed to open payment gateway. Please try again.");
       setIsTopupSubmitting(false);
     }
@@ -290,7 +326,10 @@ export default function AgentWallet() {
                   min="1"
                   step="0.01"
                   value={topupAmount}
-                  onChange={(e) => setTopupAmount(e.target.value)}
+                  onChange={(e) => {
+                    setTopupAmount(e.target.value);
+                    setSelectedBundleId("");
+                  }}
                   placeholder="e.g. 50.00"
                   className="w-full px-4 h-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none font-bold text-slate-900 bg-white"
                 />
@@ -304,9 +343,13 @@ export default function AgentWallet() {
                       <button
                         key={bundle.id}
                         type="button"
-                        onClick={() => setTopupAmount(bundle.base_price.toString())}
+                        onClick={() => {
+                          setTopupAmount(bundle.base_price.toString());
+                          setSelectedBundleId(bundle.id);
+                          setRecipientNetwork(bundle.network);
+                        }}
                         className={`p-2 border text-left rounded-xl hover:border-brand-primary hover:bg-brand-light/10 transition-all cursor-pointer group flex flex-col justify-between ${
-                          parseFloat(topupAmount) === bundle.base_price
+                          selectedBundleId === bundle.id
                             ? "border-brand-primary bg-brand-light/20 ring-2 ring-brand-primary/25"
                             : "border-slate-200 bg-white"
                         }`}
@@ -337,12 +380,64 @@ export default function AgentWallet() {
                 </div>
               )}
 
+              {/* Optional recipient details for direct bundle purchase */}
+              {selectedBundleId && (
+                <div className="space-y-4 border-t border-slate-100 pt-4 animate-in fade-in duration-200">
+                  <div className="space-y-2">
+                    <label className="text-xs sm:text-sm font-bold text-slate-700 block">
+                      Recipient Phone (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      placeholder="e.g. 0241234567 (blank to Top Up)"
+                      className="w-full px-4 h-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none font-medium text-slate-900 bg-white"
+                    />
+                  </div>
+
+                  {recipientPhone.trim().length > 0 && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                      <label className="text-xs sm:text-sm font-bold text-slate-700 block">
+                        Recipient Network
+                      </label>
+                      <select
+                        value={recipientNetwork}
+                        onChange={(e) => setRecipientNetwork(e.target.value)}
+                        className="w-full px-4 h-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none bg-white font-medium text-slate-700"
+                      >
+                        <option value="MTN">MTN</option>
+                        <option value="Vodafone">Vodafone / Telecel</option>
+                        <option value="AirtelTigo">AirtelTigo</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {recipientPhone.trim().length >= 10 && (
+                    <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-100 text-xs font-semibold space-y-1">
+                      <div className="flex justify-between">
+                        <span>Wholesale Price:</span>
+                        <span>{formatCurrency(parseFloat(topupAmount) || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Platform Fee:</span>
+                        <span>{formatCurrency(platformFee)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-emerald-200/60 pt-1.5 font-bold text-[13px]">
+                        <span>Total MoMo Payment:</span>
+                        <span>{formatCurrency((parseFloat(topupAmount) || 0) + platformFee)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button 
                 type="submit"
                 disabled={isTopupSubmitting || !topupAmount || parseFloat(topupAmount) <= 0}
                 className="w-full bg-brand-primary text-white h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-dark transition-colors disabled:opacity-50 mt-6 btn-animate shadow-lg shadow-brand-primary/20 cursor-pointer"
               >
-                {isTopupSubmitting ? "Opening Payment..." : "Buy Credit"}
+                {isTopupSubmitting ? "Opening Payment..." : (recipientPhone.trim().length >= 10 ? "Buy Bundle for User" : "Buy Credit")}
                 {!isTopupSubmitting && <ArrowRight className="w-5 h-5" />}
               </button>
             </form>
