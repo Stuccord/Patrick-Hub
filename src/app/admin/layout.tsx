@@ -392,6 +392,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 Back to Homepage
               </Link>
               <Link 
+                href="/admin/bundles" 
+                onClick={() => setShowMoreMenu(false)}
+                className="flex items-center gap-3.5 p-3 hover:bg-[#F9FAFB] rounded-xl transition-all font-medium text-[#374151] text-[14px]"
+              >
+                <Package className="h-5 w-5 text-[#9CA3AF] shrink-0" />
+                Bundles Inventory
+              </Link>
+              <Link 
                 href="/admin/pricing" 
                 onClick={() => setShowMoreMenu(false)}
                 className="flex items-center gap-3.5 p-3 hover:bg-[#F9FAFB] rounded-xl transition-all font-medium text-[#374151] text-[14px]"

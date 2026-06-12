@@ -319,8 +319,8 @@ export default function AdminBundles() {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+          <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] shrink-0">
               <h2 className="text-[16px] font-bold text-[#111827]">
                 {editingBundle ? "Edit Bundle" : "Add New Bundle"}
               </h2>
@@ -332,7 +332,7 @@ export default function AdminBundles() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-1.5">Bundle Name</label>
                 <input 
