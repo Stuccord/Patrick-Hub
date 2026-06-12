@@ -184,15 +184,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Transactions
           </Link>
           <Link 
-            href="/admin/pricing" 
+            href="/admin/security" 
             className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-[14px] transition-colors min-h-0 ${
-              isActive("/admin/settings") 
+              isActive("/admin/security") 
                 ? "bg-[#F0FDF4] text-[#16A34A] font-semibold" 
                 : "text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB]"
             }`}
           >
-            <Settings className="h-[20px] w-[20px] shrink-0" />
-            Settings
+            <CreditCard className="h-[20px] w-[20px] shrink-0" />
+            Security Settings
+          </Link>
+          <Link 
+            href="/admin/audit-logs" 
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-[14px] transition-colors min-h-0 ${
+              isActive("/admin/audit-logs") 
+                ? "bg-[#F0FDF4] text-[#16A34A] font-semibold" 
+                : "text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB]"
+            }`}
+          >
+            <Activity className="h-[20px] w-[20px] shrink-0" />
+            System Audit Logs
           </Link>
           <Link 
             href="/" 
@@ -416,7 +427,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 Transactions History
               </Link>
               <Link 
-                href="#" 
+                href="/admin/security" 
                 onClick={() => setShowMoreMenu(false)}
                 className="flex items-center gap-3.5 p-3 hover:bg-[#F9FAFB] rounded-xl transition-all font-medium text-[#374151] text-[14px]"
               >
@@ -424,7 +435,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 Security Settings
               </Link>
               <Link 
-                href="#" 
+                href="/admin/audit-logs" 
                 onClick={() => setShowMoreMenu(false)}
                 className="flex items-center gap-3.5 p-3 hover:bg-[#F9FAFB] rounded-xl transition-all font-medium text-[#374151] text-[14px]"
               >
